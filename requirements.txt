@@ -1,0 +1,10 @@
+# Core pipeline & app (see docs/SPARK.md for Spark vs sklearn-only notes)
+streamlit==1.37.0
+pandas
+numpy
+pyspark==3.4.1
+scikit-learn
+joblib
+matplotlib
+seaborn
+requests

@@ -1,0 +1,37 @@
+# Large raw/processed datasets (keep locally or use DVC / release assets)
+Data/*
+!Data/Model_Data/
+!Data/Model_Data/.gitkeep
+
+# Spark / training temp outputs
+Data/_temp*/
+Models/artifacts/
+Scripts/artifacts/
+
+# Saved models (optional: commit sklearn pickle only if small)
+Models/spark_pipeline_model/
+Models/*.pkl
+Models/*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+venv/
+.venv/
+.env
+*.egg-info/
+dist/
+build/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Logs
+*.log
+.spark-events/
+
+# Streamlit
+.streamlit/secrets.toml
