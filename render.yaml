@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: fraud-detection-app
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    envVars:
+      - key: BASE_DIR
+        value: /app
+      - key: MODEL_DATA_DIR
+        value: /app/Data/Model_Data
