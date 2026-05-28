@@ -487,14 +487,15 @@ with tab1:
 
     with right_col:
         numeric_inputs_raw = {}
-        st.caption("Enter values manually. Placeholder shows meaning + valid range.")
+        st.caption("Enter values manually. Placeholder shows valid range; hover ? for meaning.")
         for f in FEATURE_COLS:
             min_v, max_v, _, _ = FEATURE_RANGES.get(f, (0.0, 1_000_000.0, 0.0, 0.1))
             desc = FEATURE_DESCRIPTIONS.get(f, "No description available.")
             numeric_inputs_raw[f] = st.text_input(
                 f,
                 value="",
-                placeholder=f"{desc} | {format_bound(min_v)} to {format_bound(max_v)}",
+                placeholder=f"{format_bound(min_v)} to {format_bound(max_v)}",
+                help=f"{desc}\nValid range: {format_bound(min_v)} to {format_bound(max_v)}",
             )
 
     st.markdown("---")
