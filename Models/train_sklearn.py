@@ -24,13 +24,13 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 import argparse
+import hashlib
 import joblib
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, f1_score, precision_recall_fscore_support
 
 from config import FRAUD_RISK_SCORED_CSV, GBT_SKLEARN_PKL, model_data_path
 
@@ -41,11 +41,15 @@ INPUT_CSV = str(FRAUD_RISK_SCORED_CSV)
 OUT_MODEL = str(GBT_SKLEARN_PKL)
 OUT_PRED_CSV = str(model_data_path("fraud_detection_gbt_sklearn_predictions.csv"))
 
+# Exclude all rule-input columns to reduce label leakage from rule-based targets.
 FEATURE_COLS = [
-    "total_claims", "total_drug_cost", "opioid_claims", "opioid_cost",
-    "antibiotic_claims", "payment_to_drug_cost_ratio", "peer_deviation_score",
-    "avg_risk_score", "payment_variability", "adjusted_risk_payment",
-    "high_payment_flag", "high_opioid_flag", "elderly_focus_flag"
+    "total_claims",
+    "total_drug_cost",
+    "opioid_cost",
+    "antibiotic_claims",
+    "avg_risk_score",
+    "payment_variability",
+    "adjusted_risk_payment",
 ]
 
 LABEL_COL = "fraud_risk_category"  # expected values: "Low","Medium","High"
@@ -55,6 +59,12 @@ LABEL_COL = "fraud_risk_category"  # expected values: "Low","Medium","High"
 # ---------------------------
 def map_label(series):
     return series.map({"Low": 0, "Medium": 1, "High": 2})
+
+
+def stable_prescriber_bucket(value, modulo=10000):
+    text = str(value if pd.notnull(value) else "")
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % modulo
 
 def load_and_preprocess(input_csv, nrows=None, sample_frac=None, random_state=42):
     if not os.path.exists(input_csv):
@@ -94,12 +104,16 @@ def main(args):
     if len(unique_labels) < 2:
         raise RuntimeError(f"Need at least two classes to train. Found labels: {unique_labels}")
 
-    # Train/validation split (stratify if possible)
-    test_size = args.test_size
-    stratify = y if len(unique_labels) > 1 else None
-    X_train, X_val, y_train, y_val, idx_train, idx_val = train_test_split(
-        X, y, df.index, test_size=test_size, random_state=args.random_state, stratify=stratify
-    )
+    # Holdout split by prescriber hash to avoid leakage across train/validation.
+    split_series = df.get("prescriber_id", pd.Series(range(len(df))))
+    split_bucket = split_series.apply(stable_prescriber_bucket)
+    val_mask = (split_bucket / 10000.0) >= (1.0 - args.test_size)
+    if val_mask.all() or (~val_mask).all():
+        raise RuntimeError("Holdout split failed: adjust test_size or check prescriber_id values.")
+    train_mask = ~val_mask
+
+    X_train, X_val = X[train_mask.values], X[val_mask.values]
+    y_train, y_val = y[train_mask.values], y[val_mask.values]
 
     print(f"Train rows: {len(X_train)}, Val rows: {len(X_val)}")
 
@@ -121,7 +135,15 @@ def main(args):
     # Validate
     val_pred = clf.predict(X_val_s)
     acc = (val_pred == y_val).mean()
+    macro_f1 = f1_score(y_val, val_pred, average="macro")
+    per_p, per_r, per_f1, _ = precision_recall_fscore_support(
+        y_val, val_pred, labels=[0, 1, 2], zero_division=0
+    )
     print(f"Validation accuracy: {acc:.4f}")
+    print(f"Validation macro-F1: {macro_f1:.4f}")
+    print("Per-class metrics:")
+    for lbl, p, r, f in zip(["Low", "Medium", "High"], per_p, per_r, per_f1):
+        print(f"  {lbl:<6} Precision={p:.3f} Recall={r:.3f} F1={f:.3f}")
     print("\nDetailed classification report:")
     print(classification_report(y_val, val_pred, target_names=["Low", "Medium", "High"]))
     print("\nConfusion matrix:")

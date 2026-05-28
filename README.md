@@ -68,7 +68,6 @@ Project/
 ├── Outputs/
 │   ├── EDA/                 # Exploratory analysis (Spark + matplotlib)
 │   └── Reports/             # Streamlit app, Dockerfile, requirements
-├── MTECH_PPT_Review_3.pptx  # Presentation deck
 └── README.md
 ```
 
@@ -157,7 +156,8 @@ python run_pipeline.py all
 # or stage by stage: clean | aggregate | features | score
 ```
 
-Spark saved models vs PySpark pin: see [docs/SPARK.md](docs/SPARK.md).
+Spark saved models vs PySpark pin: see [docs/SPARK.md](docs/SPARK.md).  
+Leakage controls and excluded rule-input features: [docs/LABEL_LEAKAGE.md](docs/LABEL_LEAKAGE.md).
 
 ---
 
@@ -189,9 +189,9 @@ spark-submit Scripts/fraud_risk_scoring.py
 
 | Script | Model | Notes |
 |--------|-------|-------|
-| `Models/gbt_removing_leakage.py` | Spark GBT + One-vs-Rest | Excludes `peer_deviation_score`, `elderly_focus_flag` |
+| `Models/gbt_removing_leakage.py` | Spark GBT + One-vs-Rest | Excludes all rule-input features; reports macro-F1 + per-class metrics |
 | `Models/gbt_tune_safe.py` | Spark GBT + TVS + resampling | Hyperparameter tuning; combined over/under-sample |
-| `Models/rf_removing_leakage.py` | Spark Random Forest | Same leakage exclusions |
+| `Models/rf_removing_leakage.py` | Spark Random Forest | Excludes all rule-input features; reports macro-F1 + per-class metrics |
 | `Models/rf_tune_safe.py` | Spark RF + TVS + resampling | |
 | `Models/train_sklearn.py` | sklearn `GradientBoostingClassifier` | Lightweight deployable model |
 
@@ -303,6 +303,6 @@ License not yet specified. Add a `LICENSE` file (e.g. MIT for code; note CMS dat
 
 ## Author & context
 
-Developed as part of **LTI Mindtree internship** work (healthcare analytics / M.Tech review). Presentation: `MTECH_PPT_Review_3.pptx`.
+Developed as part of **LTI Mindtree internship** work (healthcare analytics / M.Tech review).
 
 For questions about pushing to GitHub, coordinate repo name, whether to include `Model_Data/`, and handling of local `Data/` separately from this codebase.

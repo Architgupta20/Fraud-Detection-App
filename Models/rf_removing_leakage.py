@@ -71,14 +71,18 @@ def main():
         )
 
         # ----------------------------
-        # FEATURES: exclude suspected leakage columns
-        # (do NOT include peer_deviation_score or elderly_focus_flag)
+        # FEATURES: exclude all columns used directly by scoring rules.
+        # Rule inputs removed: payment_to_drug_cost_ratio, opioid_claims,
+        # high_payment_flag, high_opioid_flag, peer_deviation_score, elderly_focus_flag
         # ----------------------------
         feature_cols = [
-            "total_claims", "total_drug_cost", "opioid_claims", "opioid_cost",
-            "antibiotic_claims", "payment_to_drug_cost_ratio",
-            "avg_risk_score", "payment_variability", "adjusted_risk_payment",
-            "high_payment_flag", "high_opioid_flag"
+            "total_claims",
+            "total_drug_cost",
+            "opioid_cost",
+            "antibiotic_claims",
+            "avg_risk_score",
+            "payment_variability",
+            "adjusted_risk_payment",
         ]
 
         # Defensive casting / creation: ensure every feature exists and is double
@@ -145,6 +149,7 @@ def main():
         # Per-class metrics
         # ----------------------------
         print("\n===== PER-CLASS METRICS =====")
+        per_class_f1 = []
         for lbl in [0, 1, 2]:
             tp = predictions.filter((col("fraud_label") == lbl) & (col("prediction") == lbl)).count()
             fp = predictions.filter((col("fraud_label") != lbl) & (col("prediction") == lbl)).count()
@@ -152,7 +157,9 @@ def main():
             precision = tp / (tp + fp) if (tp + fp) > 0 else 0
             recall = tp / (tp + fn) if (tp + fn) > 0 else 0
             f1_local = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
+            per_class_f1.append(f1_local)
             print(f"Label {lbl} -> Precision: {precision:.3f}, Recall: {recall:.3f}, F1: {f1_local:.3f} (TP={tp}, FP={fp}, FN={fn})")
+        print(f"Macro-F1: {sum(per_class_f1) / len(per_class_f1):.4f}")
 
         # ----------------------------
         # Feature importances
