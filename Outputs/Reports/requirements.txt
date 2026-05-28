@@ -1,5 +1,4 @@
 streamlit==1.37.0
 pandas
 numpy
-pyspark==3.4.1
 requests
