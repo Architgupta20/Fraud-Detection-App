@@ -278,19 +278,35 @@ FEATURE_COLS = [
 # Input guardrails for single-record prediction UI:
 # (min, max, default, step)
 FEATURE_RANGES = {
-    "total_claims": (0.0, 1_000_000.0, 0.0, 1.0),
-    "total_drug_cost": (0.0, 100_000_000.0, 0.0, 100.0),
-    "opioid_claims": (0.0, 1_000_000.0, 0.0, 1.0),
-    "opioid_cost": (0.0, 100_000_000.0, 0.0, 100.0),
-    "antibiotic_claims": (0.0, 1_000_000.0, 0.0, 1.0),
-    "payment_to_drug_cost_ratio": (0.0, 1000.0, 0.0, 0.01),
-    "peer_deviation_score": (0.0, 1000.0, 0.0, 0.01),
-    "avg_risk_score": (0.0, 10.0, 0.0, 0.01),
-    "payment_variability": (0.0, 1000.0, 0.0, 0.01),
-    "adjusted_risk_payment": (0.0, 1_000_000_000.0, 0.0, 100.0),
+    "total_claims": (0.0, 200_000.0, 0.0, 1.0),
+    "total_drug_cost": (0.0, 20_000_000.0, 0.0, 100.0),
+    "opioid_claims": (0.0, 50_000.0, 0.0, 1.0),
+    "opioid_cost": (0.0, 10_000_000.0, 0.0, 100.0),
+    "antibiotic_claims": (0.0, 50_000.0, 0.0, 1.0),
+    "payment_to_drug_cost_ratio": (0.0, 20.0, 0.0, 0.01),
+    "peer_deviation_score": (0.0, 20.0, 0.0, 0.01),
+    "avg_risk_score": (0.0, 5.0, 0.0, 0.01),
+    "payment_variability": (0.0, 50.0, 0.0, 0.01),
+    "adjusted_risk_payment": (0.0, 50_000_000.0, 0.0, 100.0),
     "high_payment_flag": (0.0, 1.0, 0.0, 1.0),
     "high_opioid_flag": (0.0, 1.0, 0.0, 1.0),
     "elderly_focus_flag": (0.0, 1.0, 0.0, 1.0),
+}
+
+FEATURE_DESCRIPTIONS = {
+    "total_claims": "Total claims",
+    "total_drug_cost": "Total drug cost (USD)",
+    "opioid_claims": "Opioid claims",
+    "opioid_cost": "Opioid cost (USD)",
+    "antibiotic_claims": "Antibiotic claims",
+    "payment_to_drug_cost_ratio": "Payment/drug cost ratio",
+    "peer_deviation_score": "Peer deviation score",
+    "avg_risk_score": "Average risk score",
+    "payment_variability": "Payment variability",
+    "adjusted_risk_payment": "Adjusted risk payment",
+    "high_payment_flag": "High payment flag (0 or 1)",
+    "high_opioid_flag": "High opioid flag (0 or 1)",
+    "elderly_focus_flag": "Elderly focus flag (0 or 1)",
 }
 
 # ---------- SPARK IMPORT ----------
@@ -351,6 +367,12 @@ def softmax(arr):
     return [e / s for e in exps] if s != 0 else [0.0 for _ in exps]
 
 
+def format_bound(value: float) -> str:
+    if float(value).is_integer():
+        return f"{int(value):,}"
+    return f"{value:g}"
+
+
 def parse_numeric_inputs(raw_inputs: Dict[str, str]):
     parsed = {}
     errors = []
@@ -366,7 +388,9 @@ def parse_numeric_inputs(raw_inputs: Dict[str, str]):
                 errors.append(f"{feat}: enter a valid number.")
                 continue
         if value < min_v or value > max_v:
-            errors.append(f"{feat}: must be between {min_v:g} and {max_v:g}.")
+            errors.append(
+                f"{feat}: must be between {format_bound(min_v)} and {format_bound(max_v)}."
+            )
             continue
         parsed[feat] = value
     return parsed, errors
@@ -463,24 +487,15 @@ with tab1:
 
     with right_col:
         numeric_inputs_raw = {}
-        st.caption("Enter values manually. Placeholder shows accepted range.")
+        st.caption("Enter values manually. Placeholder shows meaning + valid range.")
         for f in FEATURE_COLS:
             min_v, max_v, _, _ = FEATURE_RANGES.get(f, (0.0, 1_000_000.0, 0.0, 0.1))
+            desc = FEATURE_DESCRIPTIONS.get(f, "No description available.")
             numeric_inputs_raw[f] = st.text_input(
                 f,
                 value="",
-                placeholder=f"{min_v:g} to {max_v:g}",
-                help=f"Allowed range: {min_v:g} to {max_v:g}",
+                placeholder=f"{desc} | {format_bound(min_v)} to {format_bound(max_v)}",
             )
-
-        with st.expander("Accepted ranges (all features)"):
-            range_df = pd.DataFrame(
-                [
-                    {"feature": feat, "min": vals[0], "max": vals[1], "default": vals[2]}
-                    for feat, vals in FEATURE_RANGES.items()
-                ]
-            )
-            st.dataframe(range_df, hide_index=True, use_container_width=True)
 
     st.markdown("---")
     _, center, _ = st.columns([1, 1, 1])
