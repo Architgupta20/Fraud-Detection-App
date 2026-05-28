@@ -1,5 +1,5 @@
 # Use base image that already has Java (for Spark) and a clean Linux environment
-FROM openjdk:17-jdk-slim
+FROM eclipse-temurin:17-jdk-jammy
 
 # Install Python 3 and pip
 RUN apt-get update && apt-get install -y --no-install-recommends \
