@@ -294,19 +294,58 @@ FEATURE_RANGES = {
 }
 
 FEATURE_DESCRIPTIONS = {
-    "total_claims": "Total claims",
-    "total_drug_cost": "Total drug cost (USD)",
-    "opioid_claims": "Opioid claims",
-    "opioid_cost": "Opioid cost (USD)",
-    "antibiotic_claims": "Antibiotic claims",
-    "payment_to_drug_cost_ratio": "Payment/drug cost ratio",
-    "peer_deviation_score": "Peer deviation score",
-    "avg_risk_score": "Average risk score",
-    "payment_variability": "Payment variability",
-    "adjusted_risk_payment": "Adjusted risk payment",
-    "high_payment_flag": "High payment flag (0 or 1)",
-    "high_opioid_flag": "High opioid flag (0 or 1)",
-    "elderly_focus_flag": "Elderly focus flag (0 or 1)",
+    "total_claims": (
+        "How many Medicare Part D prescriptions this provider submitted in the reporting period. "
+        "Higher volume can indicate heavy prescribing activity."
+    ),
+    "total_drug_cost": (
+        "Total dollar amount of drugs prescribed (not including patient copays). "
+        "Helps compare prescribing cost intensity across providers."
+    ),
+    "opioid_claims": (
+        "Count of claims for opioid medications. "
+        "Used to flag unusually high opioid prescribing patterns."
+    ),
+    "opioid_cost": (
+        "Total dollar cost of opioid prescriptions. "
+        "High values may indicate costly or frequent opioid use."
+    ),
+    "antibiotic_claims": (
+        "Count of antibiotic prescriptions. "
+        "Can signal broad antibiotic use relative to the provider's overall practice."
+    ),
+    "payment_to_drug_cost_ratio": (
+        "Industry/manufacturer payments divided by total drug cost. "
+        "Values above 1 mean payments exceed drug spending — a common financial-conflict signal."
+    ),
+    "peer_deviation_score": (
+        "How this provider's average payment compares to others with the same specialty. "
+        "1.0 = typical; well above 1.0 means they receive much more than peers."
+    ),
+    "avg_risk_score": (
+        "Average Medicare beneficiary risk score for this provider's patients (higher = sicker panel). "
+        "Context for whether prescribing/payment patterns match patient complexity."
+    ),
+    "payment_variability": (
+        "Ratio of largest single payment to average payment size. "
+        "High values mean a few very large payments stand out from the norm."
+    ),
+    "adjusted_risk_payment": (
+        "Total industry payments multiplied by average patient risk. "
+        "Rough measure of payments in the context of a high-risk patient population."
+    ),
+    "high_payment_flag": (
+        "1 if average payment per transaction exceeds $1,000, else 0. "
+        "Quick yes/no indicator for unusually large typical payments."
+    ),
+    "high_opioid_flag": (
+        "1 if more than half of this provider's claims are opioid-related, else 0. "
+        "Flags prescribers with a very opioid-heavy mix."
+    ),
+    "elderly_focus_flag": (
+        "1 if average patient age is above 70, else 0. "
+        "Indicates whether the practice mainly serves older beneficiaries."
+    ),
 }
 
 # ---------- SPARK IMPORT ----------
@@ -495,7 +534,7 @@ with tab1:
                 f,
                 value="",
                 placeholder=f"{format_bound(min_v)} to {format_bound(max_v)}",
-                help=f"{desc}\nValid range: {format_bound(min_v)} to {format_bound(max_v)}",
+                help=desc,
             )
 
     st.markdown("---")
