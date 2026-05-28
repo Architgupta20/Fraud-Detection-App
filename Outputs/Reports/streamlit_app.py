@@ -350,6 +350,27 @@ def softmax(arr):
     s = sum(exps)
     return [e / s for e in exps] if s != 0 else [0.0 for _ in exps]
 
+
+def parse_numeric_inputs(raw_inputs: Dict[str, str]):
+    parsed = {}
+    errors = []
+    for feat, raw_val in raw_inputs.items():
+        min_v, max_v, default_v, _ = FEATURE_RANGES.get(feat, (0.0, 1_000_000.0, 0.0, 0.1))
+        text = str(raw_val).strip()
+        if text == "":
+            value = float(default_v)
+        else:
+            try:
+                value = float(text)
+            except ValueError:
+                errors.append(f"{feat}: enter a valid number.")
+                continue
+        if value < min_v or value > max_v:
+            errors.append(f"{feat}: must be between {min_v:g} and {max_v:g}.")
+            continue
+        parsed[feat] = value
+    return parsed, errors
+
 # ---------- FIXED FUNCTION (no type inference error) ----------
 def predict_with_pipeline_single(row_dict: Dict):
     if pipeline_model is None or spark is None:
@@ -441,17 +462,14 @@ with tab1:
         state = st.text_input("State", "")
 
     with right_col:
-        numeric_inputs = {}
-        st.caption("Accepted ranges for manual input are shown below each field.")
+        numeric_inputs_raw = {}
+        st.caption("Enter values manually. Placeholder shows accepted range.")
         for f in FEATURE_COLS:
-            min_v, max_v, default_v, step_v = FEATURE_RANGES.get(f, (0.0, 1_000_000.0, 0.0, 0.1))
-            numeric_inputs[f] = st.number_input(
+            min_v, max_v, _, _ = FEATURE_RANGES.get(f, (0.0, 1_000_000.0, 0.0, 0.1))
+            numeric_inputs_raw[f] = st.text_input(
                 f,
-                min_value=float(min_v),
-                max_value=float(max_v),
-                value=float(default_v),
-                step=float(step_v),
-                format="%.6f",
+                value="",
+                placeholder=f"{min_v:g} to {max_v:g}",
                 help=f"Allowed range: {min_v:g} to {max_v:g}",
             )
 
@@ -475,6 +493,10 @@ with tab1:
                 "provider_type": provider_type or None,
                 "state": state or None
             }
+            numeric_inputs, input_errors = parse_numeric_inputs(numeric_inputs_raw)
+            if input_errors:
+                st.error("Please fix input values:\n- " + "\n- ".join(input_errors))
+                st.stop()
             row.update(numeric_inputs)
             try:
                 if use_spark and pipeline_model is not None:
