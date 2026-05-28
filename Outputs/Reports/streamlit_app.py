@@ -442,6 +442,7 @@ with tab1:
 
     with right_col:
         numeric_inputs = {}
+        st.caption("Accepted ranges for manual input are shown below each field.")
         for f in FEATURE_COLS:
             min_v, max_v, default_v, step_v = FEATURE_RANGES.get(f, (0.0, 1_000_000.0, 0.0, 0.1))
             numeric_inputs[f] = st.number_input(
@@ -451,7 +452,17 @@ with tab1:
                 value=float(default_v),
                 step=float(step_v),
                 format="%.6f",
+                help=f"Allowed range: {min_v:g} to {max_v:g}",
             )
+
+        with st.expander("Accepted ranges (all features)"):
+            range_df = pd.DataFrame(
+                [
+                    {"feature": feat, "min": vals[0], "max": vals[1], "default": vals[2]}
+                    for feat, vals in FEATURE_RANGES.items()
+                ]
+            )
+            st.dataframe(range_df, hide_index=True, use_container_width=True)
 
     st.markdown("---")
     _, center, _ = st.columns([1, 1, 1])
