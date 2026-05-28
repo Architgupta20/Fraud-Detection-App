@@ -275,6 +275,24 @@ FEATURE_COLS = [
     "high_payment_flag", "high_opioid_flag", "elderly_focus_flag"
 ]
 
+# Input guardrails for single-record prediction UI:
+# (min, max, default, step)
+FEATURE_RANGES = {
+    "total_claims": (0.0, 1_000_000.0, 0.0, 1.0),
+    "total_drug_cost": (0.0, 100_000_000.0, 0.0, 100.0),
+    "opioid_claims": (0.0, 1_000_000.0, 0.0, 1.0),
+    "opioid_cost": (0.0, 100_000_000.0, 0.0, 100.0),
+    "antibiotic_claims": (0.0, 1_000_000.0, 0.0, 1.0),
+    "payment_to_drug_cost_ratio": (0.0, 1000.0, 0.0, 0.01),
+    "peer_deviation_score": (0.0, 1000.0, 0.0, 0.01),
+    "avg_risk_score": (0.0, 10.0, 0.0, 0.01),
+    "payment_variability": (0.0, 1000.0, 0.0, 0.01),
+    "adjusted_risk_payment": (0.0, 1_000_000_000.0, 0.0, 100.0),
+    "high_payment_flag": (0.0, 1.0, 0.0, 1.0),
+    "high_opioid_flag": (0.0, 1.0, 0.0, 1.0),
+    "elderly_focus_flag": (0.0, 1.0, 0.0, 1.0),
+}
+
 # ---------- SPARK IMPORT ----------
 try:
     from pyspark.sql import SparkSession
@@ -423,7 +441,17 @@ with tab1:
         state = st.text_input("State", "")
 
     with right_col:
-        numeric_inputs = {f: st.number_input(f, value=0.0, step=0.1, format="%.6f") for f in FEATURE_COLS}
+        numeric_inputs = {}
+        for f in FEATURE_COLS:
+            min_v, max_v, default_v, step_v = FEATURE_RANGES.get(f, (0.0, 1_000_000.0, 0.0, 0.1))
+            numeric_inputs[f] = st.number_input(
+                f,
+                min_value=float(min_v),
+                max_value=float(max_v),
+                value=float(default_v),
+                step=float(step_v),
+                format="%.6f",
+            )
 
     st.markdown("---")
     _, center, _ = st.columns([1, 1, 1])
