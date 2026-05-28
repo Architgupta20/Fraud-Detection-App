@@ -1,0 +1,28 @@
+# VCS / editor
+.git
+.gitignore
+.vscode
+.idea
+__pycache__/
+*.pyc
+
+# Local environments
+.venv/
+venv/
+.env
+
+# Large local data (keep demo artifacts only)
+Data/*
+!Data/Model_Data/
+!Data/Model_Data/*.csv
+!Data/Model_Data/*.png
+!Data/Model_Data/.gitkeep
+
+# Local model binaries and Spark saved models
+Models/spark_pipeline_model/
+Models/*.pkl
+Models/*.zip
+
+# Build/runtime noise
+*.log
+.DS_Store

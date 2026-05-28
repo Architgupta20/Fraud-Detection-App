@@ -191,7 +191,7 @@ def main():
         final_cols = []
         if "prescriber_id" in predictions.columns:
             final_cols.append("prescriber_id")
-        for c in ["first_name", "last_name", "provider_type", "state",
+        for c in ["provider_type", "state",
                   "total_claims", "total_payment_amount", "payment_to_drug_cost_ratio",
                   "fraud_risk_category"]:
             if c in predictions.columns:

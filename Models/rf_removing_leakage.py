@@ -187,7 +187,7 @@ def main():
         )
 
         final_cols = [
-            "prescriber_id", "first_name", "last_name", "provider_type", "state",
+            "prescriber_id", "provider_type", "state",
             "total_claims", "total_payment_amount", "payment_to_drug_cost_ratio",
             # intentionally excluding peer_deviation_score and elderly_focus_flag
             "fraud_risk_category", "predicted_category"

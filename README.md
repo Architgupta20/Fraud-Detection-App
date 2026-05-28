@@ -10,6 +10,7 @@ End-to-end analytics pipeline that combines **CMS Open Payments** and **Medicare
 
 - [Problem statement](#problem-statement)
 - [Data sources](#data-sources)
+- [Data guide](#data-guide)
 - [Repository layout](#repository-layout)
 - [Pipeline overview](#pipeline-overview)
 - [Prerequisites](#prerequisites)
@@ -54,6 +55,12 @@ The workflow:
 | On-disk `Data/` | ~18 GB |
 
 Raw and processed CSVs are **not committed** to Git (see [.gitignore](.gitignore)). Place data locally under `Data/` or document download instructions in `docs/DATA.md` (recommended before publishing).
+
+---
+
+## Data guide
+
+For direct CMS links, expected filenames, and local size guidance, see [`docs/DATA.md`](docs/DATA.md).
 
 ---
 
@@ -297,7 +304,7 @@ Open http://localhost:8501
 
 ## License
 
-License not yet specified. Add a `LICENSE` file (e.g. MIT for code; note CMS data terms separately) before publishing to GitHub.
+This project is licensed under the MIT License. See [`LICENSE`](LICENSE).
 
 ---
 
