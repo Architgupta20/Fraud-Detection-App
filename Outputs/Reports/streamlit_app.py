@@ -295,56 +295,63 @@ FEATURE_RANGES = {
 
 FEATURE_DESCRIPTIONS = {
     "total_claims": (
-        "How many Medicare Part D prescriptions this provider submitted in the reporting period. "
-        "Higher volume can indicate heavy prescribing activity."
+        "Real-world meaning: every time this doctor writes a prescription that Medicare Part D pays for, "
+        "that counts as one claim. Example: 5,000 claims means they issued about 5,000 prescriptions "
+        "in the reporting period."
     ),
     "total_drug_cost": (
-        "Total dollar amount of drugs prescribed (not including patient copays). "
-        "Helps compare prescribing cost intensity across providers."
+        "Real-world meaning: the total dollar value of all medicines this doctor prescribed. "
+        "Example: two doctors may write the same number of prescriptions, but one prescribes "
+        "expensive brands and will have much higher drug cost."
     ),
     "opioid_claims": (
-        "Count of claims for opioid medications. "
-        "Used to flag unusually high opioid prescribing patterns."
+        "Real-world meaning: how many of this doctor's prescriptions were for opioid pain medicines "
+        "(like oxycodone/hydrocodone classes). High values can mean heavy opioid prescribing."
     ),
     "opioid_cost": (
-        "Total dollar cost of opioid prescriptions. "
-        "High values may indicate costly or frequent opioid use."
+        "Real-world meaning: how much money (in dollars) this doctor's opioid prescriptions cost overall. "
+        "A doctor can have moderate claim count but very high opioid cost if drugs are expensive."
     ),
     "antibiotic_claims": (
-        "Count of antibiotic prescriptions. "
-        "Can signal broad antibiotic use relative to the provider's overall practice."
+        "Real-world meaning: how many antibiotic prescriptions this doctor wrote. "
+        "Very high antibiotic volume may indicate broad or repeated antibiotic use."
     ),
     "payment_to_drug_cost_ratio": (
-        "Industry/manufacturer payments divided by total drug cost. "
-        "Values above 1 mean payments exceed drug spending — a common financial-conflict signal."
+        "Real-world meaning: money received from drug companies divided by total prescribing spend. "
+        "If this is 1.5, they received $1.50 in industry payments for every $1 of drugs prescribed — "
+        "often reviewed as a potential conflict-of-interest signal."
     ),
     "peer_deviation_score": (
-        "How this provider's average payment compares to others with the same specialty. "
-        "1.0 = typical; well above 1.0 means they receive much more than peers."
+        "Real-world meaning: compares this doctor's typical payment size to other doctors of the same type. "
+        "1.0 means 'about average for peers'; 5.0 means they receive around 5x the typical peer payment level."
     ),
     "avg_risk_score": (
-        "Average Medicare beneficiary risk score for this provider's patients (higher = sicker panel). "
-        "Context for whether prescribing/payment patterns match patient complexity."
+        "Real-world meaning: how sick this doctor's patient panel is on average (Medicare risk score). "
+        "Higher score means patients are generally older/sicker, which should be considered before "
+        "judging high cost or high prescribing."
     ),
     "payment_variability": (
-        "Ratio of largest single payment to average payment size. "
-        "High values mean a few very large payments stand out from the norm."
+        "Real-world meaning: whether payments are steady or spiky. "
+        "High value means one or a few very large payments are much bigger than their usual payment size."
     ),
     "adjusted_risk_payment": (
-        "Total industry payments multiplied by average patient risk. "
-        "Rough measure of payments in the context of a high-risk patient population."
+        "Real-world meaning: total industry payments adjusted for patient sickness level. "
+        "Helps compare doctors fairly when one mostly treats very high-risk patients."
     ),
     "high_payment_flag": (
-        "1 if average payment per transaction exceeds $1,000, else 0. "
-        "Quick yes/no indicator for unusually large typical payments."
+        "Real-world meaning: quick yes/no flag. "
+        "1 = this doctor's average single payment is above $1,000 (unusually large typical payment); "
+        "0 = not above that threshold."
     ),
     "high_opioid_flag": (
-        "1 if more than half of this provider's claims are opioid-related, else 0. "
-        "Flags prescribers with a very opioid-heavy mix."
+        "Real-world meaning: quick yes/no flag. "
+        "1 = more than 50% of this doctor's prescriptions are opioids; "
+        "0 = opioids are not the majority of their prescribing."
     ),
     "elderly_focus_flag": (
-        "1 if average patient age is above 70, else 0. "
-        "Indicates whether the practice mainly serves older beneficiaries."
+        "Real-world meaning: quick yes/no flag. "
+        "1 = average patient age is above 70 (practice mainly serves elderly patients); "
+        "0 = not primarily elderly-focused."
     ),
 }
 
