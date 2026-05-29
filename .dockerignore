@@ -21,6 +21,7 @@ Data/*
 # Local model binaries and Spark saved models
 Models/spark_pipeline_model/
 Models/*.pkl
+!Models/gbt_sklearn.pkl
 Models/*.zip
 
 # Build/runtime noise

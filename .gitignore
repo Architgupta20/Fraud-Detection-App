@@ -11,6 +11,7 @@ Scripts/artifacts/
 # Saved models (optional: commit sklearn pickle only if small)
 Models/spark_pipeline_model/
 Models/*.pkl
+!Models/gbt_sklearn.pkl
 Models/*.zip
 
 # Python

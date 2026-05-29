@@ -223,6 +223,13 @@ export MODEL_DATA_DIR="$BASE_DIR/Data/Model_Data"
 streamlit run Outputs/Reports/streamlit_app.py
 ```
 
+Defaults (Phase 4):
+
+- **sklearn model** (`Models/gbt_sklearn.pkl`) when available — recommended for deploy
+- CSV fallback includes `fraud_detection_gbt_sklearn_predictions.csv`
+- Spark model is optional (heavy)
+- Single prediction shows **rule signals** and **top model features** (“why flagged”)
+
 Features:
 
 - Single prescriber lookup

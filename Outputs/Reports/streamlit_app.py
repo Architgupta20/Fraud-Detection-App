@@ -225,7 +225,8 @@
 import os
 import streamlit as st
 import pandas as pd
-from typing import Dict
+import joblib
+from typing import Dict, List, Optional, Tuple
 
 # ---------- CONFIG (works for local + Docker/Render) ----------
 import sys
@@ -236,15 +237,18 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from config import BASE_DIR as _CONFIG_BASE_DIR
+from config import GBT_SKLEARN_PKL
 from config import MODEL_DATA_DIR as _CONFIG_MODEL_DATA_DIR
 from config import SPARK_PIPELINE_MODEL_DIR
 
 BASE_DIR = os.getenv("BASE_DIR", str(_CONFIG_BASE_DIR))
 MODEL_PATH = os.getenv("MODEL_PATH", str(SPARK_PIPELINE_MODEL_DIR))
 MODEL_DATA_DIR = os.getenv("MODEL_DATA_DIR", str(_CONFIG_MODEL_DATA_DIR))
+SKLEARN_MODEL_PATH = os.getenv("SKLEARN_MODEL_PATH", str(GBT_SKLEARN_PKL))
 
 # ---------- FALLBACKS ----------
 PREDICTIONS_FILES = [
+    "fraud_detection_gbt_sklearn_predictions.csv",
     "fraud_detection_gbt_predictions.csv",
     "fraud_detection_gbt_safe_predictions.csv",
     "fraud_detection_rf_predictions.csv",
@@ -370,11 +374,33 @@ st.title("AI-Based Healthcare Claim Fraud Detection")
 
 # Sidebar
 st.sidebar.header("Settings")
-use_spark = st.sidebar.checkbox("Load Spark model (heavy)", value=False if not SPARK_AVAILABLE else True)
-use_csv_fallback = st.sidebar.checkbox("Use CSV predictions fallback (fast)", value=True if FALLBACK_PREDICTIONS else False)
+sklearn_available = os.path.exists(SKLEARN_MODEL_PATH)
+use_sklearn = st.sidebar.checkbox(
+    "Use sklearn model (recommended)",
+    value=sklearn_available,
+    disabled=not sklearn_available,
+)
+use_spark = st.sidebar.checkbox(
+    "Load Spark model (heavy)",
+    value=False,
+    disabled=not SPARK_AVAILABLE,
+)
+use_csv_fallback = st.sidebar.checkbox(
+    "Use CSV predictions fallback",
+    value=bool(FALLBACK_PREDICTIONS) and not sklearn_available,
+)
 
 # ---------- LOAD MODEL ----------
-pipeline_model, spark, predictions_df = None, None, None
+pipeline_model, spark, predictions_df, sklearn_bundle = None, None, None, None
+
+if use_sklearn and sklearn_available:
+    try:
+        with st.spinner("Loading sklearn model..."):
+            sklearn_bundle = joblib.load(SKLEARN_MODEL_PATH)
+    except Exception as e:
+        sklearn_bundle = None
+        use_sklearn = False
+        st.sidebar.error(f"Failed to load sklearn model: {e}")
 
 if use_spark and SPARK_AVAILABLE and os.path.exists(MODEL_PATH):
     try:
@@ -440,6 +466,114 @@ def parse_numeric_inputs(raw_inputs: Dict[str, str]):
             continue
         parsed[feat] = value
     return parsed, errors
+
+
+RULE_CHECKS = [
+    (
+        "High payment vs drug cost",
+        lambda r: float(r.get("payment_to_drug_cost_ratio", 0) or 0) > 1,
+        "Industry payments exceed total drug cost (ratio > 1).",
+    ),
+    (
+        "Heavy opioid prescribing",
+        lambda r: float(r.get("opioid_claims", 0) or 0) > 100,
+        "Opioid claim count is above 100.",
+    ),
+    (
+        "High payment flag",
+        lambda r: float(r.get("high_payment_flag", 0) or 0) == 1,
+        "Average payment size is flagged as unusually high.",
+    ),
+    (
+        "High opioid flag",
+        lambda r: float(r.get("high_opioid_flag", 0) or 0) == 1,
+        "More than half of claims are opioid-related.",
+    ),
+    (
+        "Peer payment outlier",
+        lambda r: float(r.get("peer_deviation_score", 0) or 0) > 5,
+        "Payment level is far above peers in the same provider type.",
+    ),
+    (
+        "Elderly-focused practice",
+        lambda r: float(r.get("elderly_focus_flag", 0) or 0) == 1,
+        "Average patient age is above 70.",
+    ),
+]
+
+
+def get_fired_rules(row: Dict) -> List[Tuple[str, str]]:
+    fired = []
+    for rule_name, check_fn, detail in RULE_CHECKS:
+        if check_fn(row):
+            fired.append((rule_name, detail))
+    return fired
+
+
+def get_top_model_features(row: Dict, bundle: Dict, top_n: int = 5) -> pd.DataFrame:
+    feature_cols = bundle["feature_cols"]
+    model = bundle["model"]
+    importances = model.feature_importances_
+    ranked = sorted(zip(feature_cols, importances), key=lambda x: x[1], reverse=True)[:top_n]
+    return pd.DataFrame(
+        [
+            {
+                "feature": feat,
+                "your_value": row.get(feat, 0),
+                "model_importance": round(float(imp), 4),
+            }
+            for feat, imp in ranked
+        ]
+    )
+
+
+def render_why_flagged(row: Dict, bundle: Optional[Dict] = None):
+    st.subheader("Why this result?")
+    fired = get_fired_rules(row)
+    if fired:
+        st.markdown("**Rule signals triggered**")
+        for name, detail in fired:
+            st.markdown(f"- **{name}:** {detail}")
+    else:
+        st.markdown("**Rule signals triggered:** none of the configured risk rules fired.")
+
+    if bundle is not None:
+        st.markdown("**Top model features (global importance)**")
+        st.dataframe(get_top_model_features(row, bundle), hide_index=True, use_container_width=True)
+
+
+def predict_with_sklearn_single(row_dict: Dict, bundle: Dict) -> Dict:
+    feature_cols = bundle["feature_cols"]
+    scaler = bundle["scaler"]
+    model = bundle["model"]
+    values = [[float(row_dict.get(c, 0) or 0) for c in feature_cols]]
+    scaled = scaler.transform(values)
+    pred = int(model.predict(scaled)[0])
+    probs = model.predict_proba(scaled)[0]
+    return {
+        "prediction": pred,
+        "predicted_category": map_label_to_category(pred),
+        "probability": [float(p) for p in probs],
+    }
+
+
+def predict_with_sklearn_batch(pdf: pd.DataFrame, bundle: Dict) -> pd.DataFrame:
+    feature_cols = bundle["feature_cols"]
+    scaler = bundle["scaler"]
+    model = bundle["model"]
+    X = pdf.reindex(columns=feature_cols, fill_value=0.0).astype(float)
+    scaled = scaler.transform(X.values)
+    preds = model.predict(scaled)
+    probs = model.predict_proba(scaled)
+    out = pdf.copy()
+    out["prediction"] = preds
+    out["predicted_category"] = [map_label_to_category(p) for p in preds]
+    if probs.shape[1] >= 3:
+        out["p_low"] = probs[:, 0]
+        out["p_medium"] = probs[:, 1]
+        out["p_high"] = probs[:, 2]
+    return out
+
 
 # ---------- FIXED FUNCTION (no type inference error) ----------
 def predict_with_pipeline_single(row_dict: Dict):
@@ -561,17 +695,25 @@ with tab1:
                 st.stop()
             row.update(numeric_inputs)
             try:
-                if use_spark and pipeline_model is not None:
+                if use_sklearn and sklearn_bundle is not None:
+                    pred = predict_with_sklearn_single(row, sklearn_bundle)
+                    st.success(f"Predicted Category: {pred['predicted_category']}")
+                    st.write("Numeric Label:", pred["prediction"])
+                    st.write("Probabilities (Low, Medium, High):", pred["probability"])
+                    render_why_flagged(row, sklearn_bundle)
+                elif use_spark and pipeline_model is not None:
                     pred = predict_with_pipeline_single(row)
                     st.success(f"Predicted Category: {pred['predicted_category']}")
                     st.write("Numeric Label:", pred["prediction"])
                     st.write("Probabilities (Low, Medium, High):")
                     st.write(pred["probability"] if pred["probability"] else "Unavailable")
+                    render_why_flagged(row)
                 elif predictions_df is not None:
                     if prescriber_id:
                         matched = predictions_df[predictions_df["prescriber_id"].astype(str) == str(prescriber_id)]
                         if not matched.empty:
                             st.dataframe(matched.T)
+                            render_why_flagged(row)
                         else:
                             st.warning("No match found in precomputed predictions CSV.")
                     else:
@@ -598,7 +740,15 @@ with tab2:
         try:
             uploaded_df = pd.read_csv(uploaded_file)
             st.write(f"Uploaded {len(uploaded_df)} rows.")
-            if use_spark and pipeline_model:
+            if use_sklearn and sklearn_bundle is not None:
+                pdf_out = predict_with_sklearn_batch(uploaded_df, sklearn_bundle)
+                st.dataframe(pdf_out.head(200))
+                st.download_button(
+                    "Download Predictions",
+                    pdf_out.to_csv(index=False).encode("utf-8"),
+                    "predictions.csv",
+                )
+            elif use_spark and pipeline_model:
                 sdf = spark.createDataFrame(uploaded_df)
                 preds = pipeline_model.transform(sdf)
                 out_cols = [c for c in ("prescriber_id", "prediction", "probability", "fraud_risk_category") if c in preds.columns]
