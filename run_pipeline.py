@@ -23,21 +23,10 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import (
-    avg,
-    col,
-    count,
-    expr,
-    lit,
-    max as spark_max,
-    regexp_extract,
-    sum as spark_sum,
-    trim,
-    when,
-)
-from pyspark.sql.functions import avg as spark_avg
+if TYPE_CHECKING:
+    from pyspark.sql import DataFrame, SparkSession
 
 from config import (
     BASE_DIR,
@@ -52,11 +41,43 @@ from config import (
 )
 
 
-def get_spark(app_name: str = "PrescriberRiskPipeline") -> SparkSession:
+def get_spark(app_name: str = "PrescriberRiskPipeline") -> "SparkSession":
+    from pyspark.sql import SparkSession
+
     return SparkSession.builder.appName(app_name).getOrCreate()
 
 
-def save_single_csv(df: DataFrame, final_path: Path, order_by: str | None = None) -> None:
+def _spark_cols():
+    from pyspark.sql.functions import (
+        avg,
+        col,
+        count,
+        expr,
+        lit,
+        max as spark_max,
+        regexp_extract,
+        sum as spark_sum,
+        trim,
+        when,
+    )
+
+    return {
+        "avg": avg,
+        "col": col,
+        "count": count,
+        "expr": expr,
+        "lit": lit,
+        "spark_max": spark_max,
+        "regexp_extract": regexp_extract,
+        "spark_sum": spark_sum,
+        "trim": trim,
+        "when": when,
+    }
+
+
+def save_single_csv(df: "DataFrame", final_path: Path, order_by: str | None = None) -> None:
+    F = _spark_cols()
+    col = F["col"]
     """Write a Spark DataFrame to a single CSV file."""
     final_path = Path(final_path)
     final_path.parent.mkdir(parents=True, exist_ok=True)
@@ -84,8 +105,15 @@ def require_file(path: Path, stage: str) -> None:
         raise FileNotFoundError(f"{stage} requires input file: {path}")
 
 
-def stage_clean(spark: SparkSession) -> None:
+def stage_clean(spark: "SparkSession") -> None:
     """Raw CMS files -> clean_prescribers.csv, clean_payments.csv."""
+    F = _spark_cols()
+    col, trim, regexp_extract, when = (
+        F["col"],
+        F["trim"],
+        F["regexp_extract"],
+        F["when"],
+    )
     require_file(PART_D_PRESCRIBERS_CSV, "clean")
     require_file(OPEN_PAYMENTS_CSV, "clean")
 
@@ -177,7 +205,9 @@ def stage_clean(spark: SparkSession) -> None:
     save_single_csv(payments_selected, CLEAN_PAYMENTS_CSV)
 
 
-def _clean_prescriber_numerics(df: DataFrame) -> DataFrame:
+def _clean_prescriber_numerics(df: "DataFrame") -> "DataFrame":
+    F = _spark_cols()
+    col, when = F["col"], F["when"]
     numeric_cols = [
         "total_claims",
         "total_drug_cost",
@@ -206,8 +236,11 @@ def _clean_prescriber_numerics(df: DataFrame) -> DataFrame:
     return df.fillna("NA", subset=string_cols)
 
 
-def stage_aggregate(spark: SparkSession) -> None:
+def stage_aggregate(spark: "SparkSession") -> None:
     """Build prescriber_level_dataset.csv and merged_payment_level_dataset.csv."""
+    F = _spark_cols()
+    col, count, expr, when = F["col"], F["count"], F["expr"], F["when"]
+    spark_sum, spark_avg, spark_max = F["spark_sum"], F["avg"], F["spark_max"]
     require_file(CLEAN_PRESCRIBERS_CSV, "aggregate")
     require_file(CLEAN_PAYMENTS_CSV, "aggregate")
 
@@ -260,8 +293,10 @@ def stage_aggregate(spark: SparkSession) -> None:
     save_single_csv(payment_level, MERGED_PAYMENT_LEVEL_CSV)
 
 
-def stage_features(spark: SparkSession) -> None:
+def stage_features(spark: "SparkSession") -> None:
     """Engineer features -> prescriber_level_enriched.csv."""
+    F = _spark_cols()
+    col, lit, when, avg = F["col"], F["lit"], F["when"], F["avg"]
     require_file(PRESCRIBER_LEVEL_CSV, "features")
     df = spark.read.csv(str(PRESCRIBER_LEVEL_CSV), header=True, inferSchema=True)
 
@@ -307,8 +342,10 @@ def stage_features(spark: SparkSession) -> None:
     print(f"Rows: {df.count()}, Columns: {len(df.columns)}")
 
 
-def stage_score(spark: SparkSession) -> None:
+def stage_score(spark: "SparkSession") -> None:
     """Apply rule-based risk labels -> fraud_risk_scored_prescribers.csv."""
+    F = _spark_cols()
+    col, when = F["col"], F["when"]
     require_file(PRESCRIBER_LEVEL_ENRICHED_CSV, "score")
     df = spark.read.csv(str(PRESCRIBER_LEVEL_ENRICHED_CSV), header=True, inferSchema=True)
 

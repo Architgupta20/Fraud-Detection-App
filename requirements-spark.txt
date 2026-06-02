@@ -1,0 +1,3 @@
+# Spark ETL + Spark ML training (requires Java 17)
+-r requirements.txt
+pyspark==3.4.1

@@ -1,4 +1,5 @@
-# Core pipeline & app (see docs/SPARK.md for Spark vs sklearn-only notes)
+# Core pipeline & app (sklearn + Streamlit). For Spark ETL/ML: pip install -r requirements-spark.txt
+# See docs/SPARK.md for version notes vs saved spark_pipeline_model/
 streamlit==1.37.0
 pandas
 numpy
