@@ -39,6 +39,12 @@ MERGED_PAYMENT_LEVEL_CSV = DATA_DIR / "merged_payment_level_dataset.csv"
 PRESCRIBER_LEVEL_ENRICHED_CSV = DATA_DIR / "prescriber_level_enriched.csv"
 FRAUD_RISK_SCORED_CSV = DATA_DIR / "fraud_risk_scored_prescribers.csv"
 
+# Risk rules spec: risk_rules.py + docs/RISK_RULES.md
+try:
+    from risk_rules import RULES_VERSION as RISK_RULES_VERSION
+except ImportError:
+    RISK_RULES_VERSION = "unknown"
+
 # Model artifacts
 GBT_SKLEARN_PKL = MODELS_DIR / "gbt_sklearn.pkl"
 XGB_CALIBRATED_PKL = MODELS_DIR / "xgb_calibrated.pkl"

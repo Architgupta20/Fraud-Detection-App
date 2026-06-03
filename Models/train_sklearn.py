@@ -24,7 +24,6 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 import argparse
-import hashlib
 import joblib
 import pandas as pd
 import numpy as np
@@ -34,87 +33,29 @@ from sklearn.metrics import classification_report, confusion_matrix, f1_score, p
 
 from config import FRAUD_RISK_SCORED_CSV, GBT_SKLEARN_PKL, model_data_path
 
-# ---------------------------
-# Configurable paths & cols
-# ---------------------------
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ml_common import FEATURE_COLS, INV_LABEL_MAP, holdout_split, load_and_preprocess
+
 INPUT_CSV = str(FRAUD_RISK_SCORED_CSV)
 OUT_MODEL = str(GBT_SKLEARN_PKL)
 OUT_PRED_CSV = str(model_data_path("fraud_detection_gbt_sklearn_predictions.csv"))
-
-# Exclude all rule-input columns to reduce label leakage from rule-based targets.
-FEATURE_COLS = [
-    "total_claims",
-    "total_drug_cost",
-    "opioid_cost",
-    "antibiotic_claims",
-    "avg_risk_score",
-    "payment_variability",
-    "adjusted_risk_payment",
-]
-
-LABEL_COL = "fraud_risk_category"  # expected values: "Low","Medium","High"
-
-# ---------------------------
-# Helpers
-# ---------------------------
-def map_label(series):
-    return series.map({"Low": 0, "Medium": 1, "High": 2})
-
-
-def stable_prescriber_bucket(value, modulo=10000):
-    text = str(value if pd.notnull(value) else "")
-    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    return int(digest[:8], 16) % modulo
-
-def load_and_preprocess(input_csv, nrows=None, sample_frac=None, random_state=42):
-    if not os.path.exists(input_csv):
-        raise FileNotFoundError(f"Input CSV not found: {input_csv}")
-    print(f"Loading CSV: {input_csv}  (nrows={nrows}, sample_frac={sample_frac})")
-    df = pd.read_csv(input_csv, nrows=nrows)
-    if sample_frac is not None and 0.0 < sample_frac < 1.0:
-        print(f"Sampling fraction {sample_frac} of {len(df)} rows...")
-        df = df.sample(frac=sample_frac, random_state=random_state)
-    # Drop rows missing the label
-    df = df[df[LABEL_COL].notnull()].copy()
-    # Ensure feature cols exist and are numeric
-    for c in FEATURE_COLS:
-        if c not in df.columns:
-            df[c] = 0.0
-    df[FEATURE_COLS] = df[FEATURE_COLS].apply(pd.to_numeric, errors="coerce").fillna(0.0)
-    # Map label
-    df["label_num"] = map_label(df[LABEL_COL]).fillna(0).astype(int)
-    return df
-
-# ---------------------------
-# Main
-# ---------------------------
 def main(args):
-    # Load / preprocess
-    df = load_and_preprocess(INPUT_CSV, nrows=args.nrows, sample_frac=args.sample_frac, random_state=args.random_state)
+    df = load_and_preprocess(
+        INPUT_CSV,
+        nrows=args.nrows,
+        sample_frac=args.sample_frac,
+        random_state=args.random_state,
+        strict_rules_version=args.strict_rules_version,
+    )
     if df.empty:
         raise RuntimeError("No data after loading/preprocessing. Check CSV and parameters.")
 
     print(f"Data rows after preprocessing: {len(df)}")
-    # Features / labels
-    X = df[FEATURE_COLS].values
-    y = df["label_num"].values
-
-    # If labels have only one class, training won't work. Check:
-    unique_labels = np.unique(y)
+    unique_labels = np.unique(df["label_num"].values)
     if len(unique_labels) < 2:
         raise RuntimeError(f"Need at least two classes to train. Found labels: {unique_labels}")
 
-    # Holdout split by prescriber hash to avoid leakage across train/validation.
-    split_series = df.get("prescriber_id", pd.Series(range(len(df))))
-    split_bucket = split_series.apply(stable_prescriber_bucket)
-    val_mask = (split_bucket / 10000.0) >= (1.0 - args.test_size)
-    if val_mask.all() or (~val_mask).all():
-        raise RuntimeError("Holdout split failed: adjust test_size or check prescriber_id values.")
-    train_mask = ~val_mask
-
-    X_train, X_val = X[train_mask.values], X[val_mask.values]
-    y_train, y_val = y[train_mask.values], y[val_mask.values]
-
+    train_df, val_df, X_train, y_train, X_val, y_val = holdout_split(df, test_size=args.test_size)
     print(f"Train rows: {len(X_train)}, Val rows: {len(X_val)}")
 
     # Scale
@@ -185,7 +126,7 @@ def main(args):
     out_df = pd.DataFrame({
         "prescriber_id": prescriber_series,
         "prediction": preds,
-        "predicted_category": pd.Series(preds).map({0: "Low", 1: "Medium", 2: "High"}),
+        "predicted_category": pd.Series(preds).map(INV_LABEL_MAP),
         "p_low": probs[:, 0],
         "p_medium": probs[:, 1],
         "p_high": probs[:, 2]
@@ -206,6 +147,11 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", type=float, default=0.1, help="Gradient boosting learning rate")
     parser.add_argument("--test-size", type=float, default=0.2, help="Validation fraction")
     parser.add_argument("--random-state", type=int, default=42, help="Random seed")
+    parser.add_argument(
+        "--strict-rules-version",
+        action="store_true",
+        help="Fail if scored CSV rules_version != risk_rules.RULES_VERSION",
+    )
     args = parser.parse_args()
 
     main(args)

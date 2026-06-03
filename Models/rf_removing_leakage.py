@@ -27,6 +27,7 @@ except Exception:
     HAS_PLOTTING = False
 
 from config import FRAUD_RISK_SCORED_CSV, data_path, model_data_path
+from risk_rules import ML_FEATURE_COLS, RULES_VERSION
 
 # ----------------------------
 # CONFIG - update paths if needed
@@ -59,31 +60,18 @@ def main():
         # sanity check label column
         if "fraud_risk_category" not in df.columns:
             raise ValueError("Expected 'fraud_risk_category' column in input CSV. Run fraud risk scoring first.")
+        if "rules_version" in df.columns:
+            print(f"Scored CSV rules_version (sample): {RULES_VERSION} expected")
 
-        # ----------------------------
-        # Map label -> numeric: Low=0, Medium=1, High=2
-        # ----------------------------
         df = df.withColumn(
             "fraud_label",
             when(col("fraud_risk_category") == "Low", 0)
             .when(col("fraud_risk_category") == "Medium", 1)
-            .otherwise(2)
+            .otherwise(2),
         )
 
-        # ----------------------------
-        # FEATURES: exclude all columns used directly by scoring rules.
-        # Rule inputs removed: payment_to_drug_cost_ratio, opioid_claims,
-        # high_payment_flag, high_opioid_flag, peer_deviation_score, elderly_focus_flag
-        # ----------------------------
-        feature_cols = [
-            "total_claims",
-            "total_drug_cost",
-            "opioid_cost",
-            "antibiotic_claims",
-            "avg_risk_score",
-            "payment_variability",
-            "adjusted_risk_payment",
-        ]
+        # Features from risk_rules.py (single source of truth)
+        feature_cols = list(ML_FEATURE_COLS)
 
         # Defensive casting / creation: ensure every feature exists and is double
         for c in feature_cols:

@@ -2,7 +2,7 @@
 """
 Train calibrated XGBoost for prescriber risk tiers.
 
-Uses the same non-leaky feature set as train_sklearn.py.
+Uses feature list and labels from risk_rules.py via ml_common.
 Saves bundle to Models/xgb_calibrated.pkl and predictions CSV.
 
 Usage:
@@ -69,6 +69,7 @@ def main(args: argparse.Namespace) -> None:
         nrows=args.nrows,
         sample_frac=args.sample_frac,
         random_state=args.random_state,
+        strict_rules_version=args.strict_rules_version,
     )
     if df.empty:
         raise RuntimeError("No data after loading/preprocessing.")
@@ -158,5 +159,10 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         default=True,
         help="Wrap XGBoost with CalibratedClassifierCV (default: on)",
+    )
+    parser.add_argument(
+        "--strict-rules-version",
+        action="store_true",
+        help="Fail if scored CSV rules_version != risk_rules.RULES_VERSION",
     )
     main(parser.parse_args())

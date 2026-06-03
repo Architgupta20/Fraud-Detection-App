@@ -1,6 +1,6 @@
 # Phase 2: Label Leakage Controls
 
-This project creates labels with rules in `Scripts/fraud_risk_scoring.py`.  
+This project creates labels with rules in `run_pipeline.py` (score stage) and `Scripts/fraud_risk_scoring.py` (standalone Spark script).  
 To avoid circular learning, model training excludes all rule-input columns.
 
 ## Rule-to-feature map
@@ -13,10 +13,16 @@ To avoid circular learning, model training excludes all rule-input columns.
 | `high_opioid_flag` | Yes | No |
 | `peer_deviation_score` | Yes | No |
 | `elderly_focus_flag` | Yes | No |
+| `antibiotic_claim_ratio` | Yes (v2) | No |
+| `antibiotic_claims` | Yes (v2, with ratio) | Yes (volume only in ML set) |
+| `total_payment_amount` | Yes (v2) | No |
+| `payment_variability` | Yes (v2) | Yes (used in ML — partial overlap; prefer rules_fired for audit) |
+
+Full rule spec: `docs/RISK_RULES.md`.
 
 ## Current non-leaky feature set
 
-All model scripts now use:
+Defined in **`risk_rules.py`** as `ML_FEATURE_COLS` (imported by `Models/ml_common.py`):
 
 - `total_claims`
 - `total_drug_cost`
@@ -25,6 +31,8 @@ All model scripts now use:
 - `avg_risk_score`
 - `payment_variability`
 - `adjusted_risk_payment`
+
+Rule-input columns are `RULE_INPUT_COLUMNS` in the same file — do not add those to `ML_FEATURE_COLS`.
 
 ## Holdout and reporting
 

@@ -191,7 +191,7 @@ def stage_clean(spark: "SparkSession") -> None:
     for old, new in renamed.items():
         payments_selected = payments_selected.withColumnRenamed(old, new)
 
-    # Normalize payment amount and zip (from Scripts/clean_payments.py)
+    # Normalize payment amount and zip
     payments_selected = payments_selected.withColumn(
         "Payment_Amount_cleaned", trim(regexp_extract(col("Payment_Amount"), r"[\d\.]+", 0))
     ).withColumn(
@@ -343,33 +343,20 @@ def stage_features(spark: "SparkSession") -> None:
 
 
 def stage_score(spark: "SparkSession") -> None:
-    """Apply rule-based risk labels -> fraud_risk_scored_prescribers.csv."""
-    F = _spark_cols()
-    col, when = F["col"], F["when"]
+    """Apply product risk rules (v2) -> fraud_risk_scored_prescribers.csv."""
+    from risk_rules import RULES_VERSION, apply_risk_scoring_spark
+
     require_file(PRESCRIBER_LEVEL_ENRICHED_CSV, "score")
     df = spark.read.csv(str(PRESCRIBER_LEVEL_ENRICHED_CSV), header=True, inferSchema=True)
 
-    df = df.withColumn(
-        "fraud_risk_score",
-        (
-            when(col("payment_to_drug_cost_ratio") > 1, 2)
-            .when(col("opioid_claims") > 100, 2)
-            .when(col("high_payment_flag") == 1, 2)
-            .when(col("high_opioid_flag") == 1, 2)
-            .when(col("peer_deviation_score") > 5, 2)
-            .when(col("elderly_focus_flag") == 1, 1)
-            .otherwise(0)
-        ),
-    )
-    df = df.withColumn(
-        "fraud_risk_category",
-        when(col("fraud_risk_score") >= 2, "High")
-        .when(col("fraud_risk_score") == 1, "Medium")
-        .otherwise("Low"),
-    )
+    print(f"\n===== Applying risk rules {RULES_VERSION} =====")
+    df = apply_risk_scoring_spark(df)
 
-    print("\n===== FRAUD RISK CATEGORY DISTRIBUTION =====")
-    df.groupBy("fraud_risk_category").count().show()
+    print("\n===== RISK CATEGORY DISTRIBUTION =====")
+    df.groupBy("fraud_risk_category").count().orderBy("fraud_risk_category").show(truncate=False)
+
+    print("\n===== RISK POINTS (sample) =====")
+    df.groupBy("risk_points").count().orderBy("risk_points").show(20, truncate=False)
 
     save_single_csv(df, FRAUD_RISK_SCORED_CSV, order_by="prescriber_id")
 

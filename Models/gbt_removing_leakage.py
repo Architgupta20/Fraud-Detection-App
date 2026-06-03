@@ -27,6 +27,7 @@ except Exception:
     HAS_PLOTTING = False
 
 from config import FRAUD_RISK_SCORED_CSV, data_path, model_data_path
+from risk_rules import ML_FEATURE_COLS, RULES_VERSION
 
 # ----------------------------
 # CONFIG - update paths if needed
@@ -68,20 +69,8 @@ def main():
             .otherwise(2)
         )
 
-        # ----------------------------
-        # FEATURES: exclude all columns used directly by scoring rules.
-        # Rule inputs removed: payment_to_drug_cost_ratio, opioid_claims,
-        # high_payment_flag, high_opioid_flag, peer_deviation_score, elderly_focus_flag
-        # ----------------------------
-        feature_cols = [
-            "total_claims",
-            "total_drug_cost",
-            "opioid_cost",
-            "antibiotic_claims",
-            "avg_risk_score",
-            "payment_variability",
-            "adjusted_risk_payment",
-        ]
+        # Features from risk_rules.py (single source of truth)
+        feature_cols = list(ML_FEATURE_COLS)
 
         # Defensive casting / creation: ensure every feature exists and is double
         for c in feature_cols:
