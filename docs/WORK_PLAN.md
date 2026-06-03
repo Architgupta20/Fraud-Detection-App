@@ -34,6 +34,15 @@ python Models/train_sklearn.py --nrows 10000
 
 ---
 
+## Phase 2a — Stronger tabular model (in progress)
+
+- [x] `Models/ml_common.py` — shared features + holdout split
+- [x] `Models/train_xgb.py` — calibrated XGBoost
+- [x] `config.py` — `XGB_CALIBRATED_PKL`
+- [x] `requirements.txt` — `xgboost`
+- [ ] Wire XGB model into Streamlit (optional checkbox)
+- [ ] Full-data train (`--sample-frac 1.0` on full CSV)
+
 ## Phase 2 — Science & labels (next)
 
 - [ ] See `docs/LABEL_LEAKAGE.md`

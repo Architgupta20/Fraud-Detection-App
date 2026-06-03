@@ -41,6 +41,7 @@ FRAUD_RISK_SCORED_CSV = DATA_DIR / "fraud_risk_scored_prescribers.csv"
 
 # Model artifacts
 GBT_SKLEARN_PKL = MODELS_DIR / "gbt_sklearn.pkl"
+XGB_CALIBRATED_PKL = MODELS_DIR / "xgb_calibrated.pkl"
 SPARK_PIPELINE_MODEL_DIR = MODELS_DIR / "spark_pipeline_model"
 
 
