@@ -15,7 +15,7 @@ Analyze **Medicare Part D prescribers** together with **CMS Open Payments** to b
 | **Ingest** | Load public CMS prescribing + payment CSVs (~18 GB locally) |
 | **Transform** | PySpark pipeline: clean → aggregate → engineer features |
 | **Score** | Apply product rules from `risk_rules.py` → risk points + category |
-| **Train** | XGBoost / sklearn (and optional Spark ML) on scored data |
+| **Train** | Calibrated XGBoost + sklearn GBT on scored data (binary Low/High) |
 | **Serve** | Streamlit demo for single lookup, batch CSV, and model outputs |
 
 **Scale:** ~1.38M prescriber rows after aggregation.
@@ -43,8 +43,7 @@ run_pipeline.py          ← PySpark ETL
 fraud_risk_scored_prescribers.csv
         │
         ├─► Models/train_xgb.py      ← production path (recommended)
-        ├─► Models/train_sklearn.py  ← lightweight deploy fallback
-        └─► Spark ML scripts         ← optional experiments
+        └─► Models/train_sklearn.py  ← lightweight deploy fallback
         │
         ▼
 Outputs/Reports/streamlit_app.py
@@ -98,10 +97,17 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
-pip install -r requirements-spark.txt   # only for ETL (PySpark)
+pip install -r requirements-spark.txt   # PySpark 3.5.5 for ETL (Python 3.13+)
 ```
 
+**ETL requirements:** Java **17+** (Java 21 works) and PySpark from `requirements-spark.txt`.  
 On macOS with XGBoost: `brew install libomp` if import fails.
+
+If you still have old **Low/Medium/High** scored or prediction files:
+
+```bash
+bash Scripts/remove_legacy_3class_artifacts.sh
+```
 
 ### 2. Download data (local only)
 
@@ -131,14 +137,25 @@ Output: `Data/Scored_Datasets/fraud_risk_scored_prescribers.csv`
 
 ### 4. Train models
 
+Uses **100% of the scored CSV** (`--sample-frac 1.0`) with an **80% train / 20% validation** split by hashed `prescriber_id` (metrics are on the held-out 20%). Prediction CSVs are written for all ~1.38M prescribers after training.
+
 ```bash
-# Recommended: full data when RAM allows
+export BASE_DIR="$(pwd)"
 python Models/train_xgb.py --sample-frac 1.0 --strict-rules-version
 python Models/train_sklearn.py --sample-frac 1.0 --strict-rules-version
 
 # Quick smoke test on laptop
-python Models/train_xgb.py --nrows 50000 --sample-frac 1.0
+python Models/train_xgb.py --nrows 50000 --sample-frac 1.0 --strict-rules-version
 ```
+
+**Latest full-data validation metrics (v2.1 labels, ~276k val rows):**
+
+| Model | Accuracy | Macro-F1 | High recall | High precision |
+|-------|----------|----------|-------------|----------------|
+| XGBoost (calibrated) | 91.4% | 0.897 | 85.9% | 84.9% |
+| sklearn GBT | 90.7% | 0.888 | 85.0% | 83.6% |
+
+Saved locally (not in Git): `Models/xgb_calibrated.pkl`, `Models/gbt_sklearn.pkl`, and prediction CSVs under `Data/Model_Data/`.
 
 ### 5. Run the app
 
@@ -163,6 +180,8 @@ Point tiers from v2 scoring (for interpreting severity): High signal strength �
 
 Scored CSV includes: `risk_points`, `rules_fired`, `rules_version` (`2.1.0`), `fraud_risk_category`.
 
+**Example distribution** (full scored file, ~1.38M rows): Low ~976k, High ~405k.
+
 Full rule table and training workflow: **[docs/RISK_RULES.md](docs/RISK_RULES.md)**
 
 ---
@@ -174,7 +193,8 @@ Full rule table and training workflow: **[docs/RISK_RULES.md](docs/RISK_RULES.md
 | `Models/train_xgb.py` | Calibrated XGBoost | `Models/xgb_calibrated.pkl`, `Data/Model_Data/fraud_detection_xgb_predictions.csv` |
 | `Models/train_sklearn.py` | sklearn Gradient Boosting | `Models/gbt_sklearn.pkl`, `Data/Model_Data/fraud_detection_gbt_sklearn_predictions.csv` |
 
-Training features: `risk_rules.ML_FEATURE_COLS` — see [docs/LABEL_LEAKAGE.md](docs/LABEL_LEAKAGE.md).
+Training features: `risk_rules.ML_FEATURE_COLS` (7 columns) — see [docs/LABEL_LEAKAGE.md](docs/LABEL_LEAKAGE.md).  
+Training **rejects** legacy `Medium` labels; re-run `score` if the scored CSV is not v2.1.
 
 ---
 
@@ -184,10 +204,10 @@ Training features: `risk_rules.ML_FEATURE_COLS` — see [docs/LABEL_LEAKAGE.md](
 
 ```bash
 docker build -t prescriber-risk-app .
-docker run -p 8501:8501 prescriber-risk-app
+docker run -p 8501:8501 -v "$(pwd)/Models:/app/Models" -v "$(pwd)/Data/Model_Data:/app/Data/Model_Data" prescriber-risk-app
 ```
 
-`.dockerignore` excludes large `Data/` files and keeps small `Model_Data/` + `gbt_sklearn.pkl` for demo deploy.
+Mount trained `.pkl` files and `Model_Data/` predictions locally — they are **not** committed to Git (see `.gitignore`).
 
 ### Render
 
@@ -217,13 +237,13 @@ Connect the GitHub repo; `render.yaml` uses the root `Dockerfile`. Set:
 - **No fraud ground truth** — labels are heuristics; frame as risk prioritization  
 - **Large local data** — raw CMS files stay on disk, not in Git  
 - **Streamlit prototype** — no auth, API, or case-management workflow yet  
-- **Re-score required** — after rules v2, run `python run_pipeline.py score` before retraining  
+- **Artifacts are local** — scored CSV, `.pkl` models, and prediction CSVs must be generated on each machine  
 
 ---
 
 ## Roadmap (product direction)
 
-1. Re-score + full-data XGB train; wire XGB in Streamlit  
+1. Wire XGB bundle in Streamlit (sklearn path works today)  
 2. FastAPI + Postgres for NPI lookup and score history  
 3. Auth and analyst queue (filter, export, assign)  
 4. Similar-case search (embeddings) and optional LLM case summaries  

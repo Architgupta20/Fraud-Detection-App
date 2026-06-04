@@ -8,7 +8,9 @@ This project uses **PySpark for the data pipeline** (`run_pipeline.py`), not for
 pip install -r requirements-spark.txt
 ```
 
-Requires **Java 17** on your machine.
+Requires **Java 17+** on your machine (Java 21 is fine).
+
+Uses **PySpark 3.5.5** (see `requirements-spark.txt`) for **Python 3.13** compatibility. Older PySpark 3.4.x fails on 3.13 with `typing.io` import errors.
 
 ## IDE import warnings
 
