@@ -24,10 +24,8 @@ SKLEARN_MODEL_PATH = os.getenv("SKLEARN_MODEL_PATH", str(GBT_SKLEARN_PKL))
 
 # ---------- FALLBACKS ----------
 PREDICTIONS_FILES = [
+    "fraud_detection_xgb_predictions.csv",
     "fraud_detection_gbt_sklearn_predictions.csv",
-    "fraud_detection_gbt_predictions.csv",
-    "fraud_detection_gbt_safe_predictions.csv",
-    "fraud_detection_rf_predictions.csv",
 ]
 FALLBACK_PREDICTIONS = next(
     (os.path.join(MODEL_DATA_DIR, p)
@@ -36,17 +34,7 @@ FALLBACK_PREDICTIONS = next(
     None
 )
 
-CONFUSION_FILES = [
-    "confusion_matrix_gbt_safe.png",
-    "confusion_matrix_gbt.png",
-    "confusion_matrix_rf.png",
-]
-FOUND_CONFUSION_IMG = next(
-    (os.path.join(MODEL_DATA_DIR, p)
-     for p in CONFUSION_FILES
-     if os.path.exists(os.path.join(MODEL_DATA_DIR, p))),
-    None
-)
+FOUND_CONFUSION_IMG = None  # optional; add PNG paths under Model_Data/ if you save plots from training
 
 FEATURE_COLS = [
     "total_claims", "total_drug_cost", "opioid_claims", "opioid_cost",

@@ -15,7 +15,6 @@ venv/
 Data/*
 !Data/Model_Data/
 !Data/Model_Data/*.csv
-!Data/Model_Data/*.png
 !Data/Model_Data/.gitkeep
 
 # Local model binaries and Spark saved models

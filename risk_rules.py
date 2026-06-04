@@ -1,7 +1,7 @@
 """
 Single source of truth for prescriber risk rules and ML training alignment.
 
-- Scoring: run_pipeline.py score, Scripts/fraud_risk_scoring.py → apply_risk_scoring_spark()
+- Scoring: run_pipeline.py score → apply_risk_scoring_spark()
 - Training: Models/ml_common.py, train_xgb.py, train_sklearn.py → ML_FEATURE_COLS, LABEL_*
 - UI: Streamlit → evaluate_rules_for_row()
 

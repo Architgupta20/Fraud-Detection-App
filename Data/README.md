@@ -21,7 +21,7 @@ _Spark_Temp           →  auto-deleted temp files (ignore)
 | **Aggregated_Datasets** | `prescriber_level_dataset.csv` (prescriber + summed payments per NPI) | `python run_pipeline.py aggregate` |
 | **Enriched_Datasets** | `prescriber_level_enriched.csv` | `python run_pipeline.py features` |
 | **Scored_Datasets** | `fraud_risk_scored_prescribers.csv` | `python run_pipeline.py score` |
-| **Model_Data** | `fraud_detection_*.csv`, `confusion_matrix_*.png` | `Models/train_*.py` |
+| **Model_Data** | `fraud_detection_xgb_predictions.csv`, `fraud_detection_gbt_sklearn_predictions.csv` | `Models/train_*.py` |
 
 ## Quick preview (do not open huge CSVs in Excel)
 

@@ -77,9 +77,9 @@ Project/
 │   ├── Scored_Datasets/    # ML + app input
 │   └── Model_Data/
 ├── Models/                 # Training scripts + saved .pkl models
-├── Scripts/                # Helpers (inspect, standalone score)
+├── Scripts/                # inspect_csv.py, migrate_data_layout.sh
 ├── Outputs/Reports/        # Streamlit app
-├── docs/                   # DATA, RISK_RULES, LABEL_LEAKAGE, SPARK, WORK_PLAN
+├── docs/                   # DATA, RISK_RULES, LABEL_LEAKAGE, SPARK
 ├── Dockerfile              # Streamlit container (root)
 └── render.yaml             # Render.com deploy config
 ```
@@ -168,16 +168,12 @@ Full rule table and training workflow: **[docs/RISK_RULES.md](docs/RISK_RULES.md
 
 ## Models
 
-| Script | Model | Use case |
-|--------|-------|----------|
-| `Models/train_xgb.py` | Calibrated XGBoost | **Primary** — best tabular performance |
-| `Models/train_sklearn.py` | sklearn Gradient Boosting | Deploy fallback; committed `gbt_sklearn.pkl` |
-| `Models/gbt_removing_leakage.py` | Spark GBT | Optional; full-data Spark experiments |
-| `Models/rf_removing_leakage.py` | Spark Random Forest | Optional |
+| Script | Model | Output |
+|--------|-------|--------|
+| `Models/train_xgb.py` | Calibrated XGBoost | `Models/xgb_calibrated.pkl`, `Data/Model_Data/fraud_detection_xgb_predictions.csv` |
+| `Models/train_sklearn.py` | sklearn Gradient Boosting | `Models/gbt_sklearn.pkl`, `Data/Model_Data/fraud_detection_gbt_sklearn_predictions.csv` |
 
-Training features are defined in `risk_rules.ML_FEATURE_COLS` (rule-input columns excluded). Details: [docs/LABEL_LEAKAGE.md](docs/LABEL_LEAKAGE.md).
-
-**Artifacts:** `Data/Model_Data/` (predictions CSVs, confusion matrices), `Models/*.pkl`
+Training features: `risk_rules.ML_FEATURE_COLS` — see [docs/LABEL_LEAKAGE.md](docs/LABEL_LEAKAGE.md).
 
 ---
 
@@ -220,7 +216,6 @@ Connect the GitHub repo; `render.yaml` uses the root `Dockerfile`. Set:
 - **No fraud ground truth** — labels are heuristics; frame as risk prioritization  
 - **Large local data** — raw CMS files stay on disk, not in Git  
 - **Streamlit prototype** — no auth, API, or case-management workflow yet  
-- **Spark saved pipeline** — version mismatch possible; prefer sklearn/XGB for deploy  
 - **Re-score required** — after rules v2, run `python run_pipeline.py score` before retraining  
 
 ---

@@ -1,6 +1,6 @@
 # Phase 2: Label Leakage Controls
 
-This project creates labels with rules in `run_pipeline.py` (score stage) and `Scripts/fraud_risk_scoring.py` (standalone Spark script).  
+This project creates labels with rules in `run_pipeline.py` (score stage).  
 To avoid circular learning, model training excludes all rule-input columns.
 
 ## Rule-to-feature map
@@ -46,6 +46,5 @@ Rule-input columns are `RULE_INPUT_COLUMNS` in the same file — do not add thos
 
 ```bash
 python Models/train_sklearn.py --sample-frac 0.2
-python Models/rf_removing_leakage.py
-python Models/gbt_removing_leakage.py
+python Models/train_xgb.py --sample-frac 0.2
 ```

@@ -1,7 +1,7 @@
 # Risk rules (product v2)
 
 Rules define **investigation priority**, not confirmed fraud.  
-Implementation: `risk_rules.py` (shared by `run_pipeline.py score` and `Scripts/fraud_risk_scoring.py`).
+Implementation: `risk_rules.py` (used by `run_pipeline.py score`).
 
 **Current version:** `2.0.0` (column `rules_version` on scored output)
 
