@@ -12,7 +12,7 @@ if str(_ROOT) not in sys.path:
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 
-from config import FRAUD_RISK_SCORED_CSV, PRESCRIBER_LEVEL_ENRICHED_CSV, data_path
+from config import FRAUD_RISK_SCORED_CSV, PRESCRIBER_LEVEL_ENRICHED_CSV, spark_temp_path
 from risk_rules import RULES_VERSION, apply_risk_scoring_spark
 
 spark = SparkSession.builder.appName("FraudRiskScoring").getOrCreate()
@@ -31,7 +31,7 @@ df.groupBy("fraud_risk_category").count().orderBy("fraud_risk_category").show(tr
 
 df = df.orderBy(col("prescriber_id").asc())
 
-output_dir = str(data_path("fraud_risk_scored_prescribers_temp"))
+output_dir = str(spark_temp_path("fraud_risk_scored_prescribers_temp"))
 final_output_path = str(FRAUD_RISK_SCORED_CSV)
 
 df.coalesce(1).write.mode("overwrite").option("header", True).csv(output_dir)

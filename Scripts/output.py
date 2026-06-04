@@ -1,4 +1,4 @@
-"""Preview first rows of the merged payment-level dataset."""
+"""Preview first rows of the prescriber-level aggregated dataset."""
 
 import sys
 from pathlib import Path
@@ -9,9 +9,9 @@ if str(_ROOT) not in sys.path:
 
 import pandas as pd
 
-from config import MERGED_PAYMENT_LEVEL_CSV
+from config import PRESCRIBER_LEVEL_CSV
 
-file_path = MERGED_PAYMENT_LEVEL_CSV
+file_path = PRESCRIBER_LEVEL_CSV
 
 if not file_path.exists():
     raise FileNotFoundError(

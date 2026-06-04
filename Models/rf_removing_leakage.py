@@ -26,14 +26,14 @@ try:
 except Exception:
     HAS_PLOTTING = False
 
-from config import FRAUD_RISK_SCORED_CSV, data_path, model_data_path
+from config import FRAUD_RISK_SCORED_CSV, model_data_path, spark_temp_path
 from risk_rules import ML_FEATURE_COLS, RULES_VERSION
 
 # ----------------------------
 # CONFIG - update paths if needed
 # ----------------------------
 INPUT_CSV = str(FRAUD_RISK_SCORED_CSV)
-TEMP_DIR = str(data_path("_temp_preds_rf_no_leak"))
+TEMP_DIR = str(spark_temp_path("_temp_preds_rf_no_leak"))
 FINAL_OUTPUT_CSV = str(model_data_path("fraud_detection_rf_predictions.csv"))
 CONFUSION_PNG = str(model_data_path("confusion_matrix_rf.png"))
 

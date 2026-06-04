@@ -17,7 +17,6 @@ from config import (
     CLEAN_PAYMENTS_CSV,
     CLEAN_PRESCRIBERS_CSV,
     FRAUD_RISK_SCORED_CSV,
-    MERGED_PAYMENT_LEVEL_CSV,
     OPEN_PAYMENTS_CSV,
     PART_D_PRESCRIBERS_CSV,
     PRESCRIBER_LEVEL_CSV,
@@ -30,7 +29,7 @@ ALIASES = {
     "clean-prescribers": CLEAN_PRESCRIBERS_CSV,
     "clean-payments": CLEAN_PAYMENTS_CSV,
     "prescriber-level": PRESCRIBER_LEVEL_CSV,
-    "payment-level": MERGED_PAYMENT_LEVEL_CSV,
+    "aggregated": PRESCRIBER_LEVEL_CSV,
     "enriched": PRESCRIBER_LEVEL_ENRICHED_CSV,
     "scored": FRAUD_RISK_SCORED_CSV,
 }

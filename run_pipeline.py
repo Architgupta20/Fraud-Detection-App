@@ -4,7 +4,7 @@ Runnable ETL pipeline for prescriber risk scoring.
 
 Stages:
   clean      - raw CMS CSVs -> clean_prescribers.csv, clean_payments.csv
-  aggregate  - prescriber-level merge + payment-level merge
+  aggregate  - prescriber-level merge (payments summed per NPI)
   features   - engineered columns -> prescriber_level_enriched.csv
   score      - rule-based labels -> fraud_risk_scored_prescribers.csv
   all        - run clean -> aggregate -> features -> score
@@ -33,7 +33,6 @@ from config import (
     CLEAN_PAYMENTS_CSV,
     CLEAN_PRESCRIBERS_CSV,
     FRAUD_RISK_SCORED_CSV,
-    MERGED_PAYMENT_LEVEL_CSV,
     OPEN_PAYMENTS_CSV,
     PART_D_PRESCRIBERS_CSV,
     PRESCRIBER_LEVEL_CSV,
@@ -237,7 +236,7 @@ def _clean_prescriber_numerics(df: "DataFrame") -> "DataFrame":
 
 
 def stage_aggregate(spark: "SparkSession") -> None:
-    """Build prescriber_level_dataset.csv and merged_payment_level_dataset.csv."""
+    """Build prescriber_level_dataset.csv (prescriber + summed payments per NPI)."""
     F = _spark_cols()
     col, count, expr, when = F["col"], F["count"], F["expr"], F["when"]
     spark_sum, spark_avg, spark_max = F["spark_sum"], F["avg"], F["spark_max"]
@@ -276,21 +275,7 @@ def stage_aggregate(spark: "SparkSession") -> None:
         }
     )
     save_single_csv(merged_df, PRESCRIBER_LEVEL_CSV, order_by="prescriber_id")
-
-    prescribers_for_join = prescribers_df.drop("first_name", "last_name", "city", "state", "zip")
-    prescribers_for_join = prescribers_for_join.withColumn(
-        "prescriber_id_num", expr("try_cast(prescriber_id as bigint)")
-    )
-    payments_for_join = payments_df.withColumn("NPI_num", expr("try_cast(NPI as bigint)"))
-    prescribers_for_join = prescribers_for_join.filter(col("prescriber_id_num").isNotNull())
-    payments_for_join = payments_for_join.filter(col("NPI_num").isNotNull())
-
-    payment_level = payments_for_join.join(
-        prescribers_for_join,
-        payments_for_join["NPI_num"] == prescribers_for_join["prescriber_id_num"],
-        "left",
-    ).drop("NPI_num", "prescriber_id_num")
-    save_single_csv(payment_level, MERGED_PAYMENT_LEVEL_CSV)
+    print(f"Wrote prescriber-level merge: {PRESCRIBER_LEVEL_CSV}")
 
 
 def stage_features(spark: "SparkSession") -> None:

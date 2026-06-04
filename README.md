@@ -69,7 +69,13 @@ Project/
 ├── risk_rules.py           # Rules + ML feature config (edit here first)
 ├── run_pipeline.py         # PySpark ETL CLI
 ├── config.py               # Paths (BASE_DIR env override)
-├── Data/                   # Local CSVs — gitignored except Model_Data/
+├── Data/                   # Stage folders — see Data/README.md
+│   ├── Original_Datasets/  # CMS downloads (2 raw files)
+│   ├── Cleaned_Datasets/
+│   ├── Aggregated_Datasets/  # merged prescriber + payments
+│   ├── Enriched_Datasets/
+│   ├── Scored_Datasets/    # ML + app input
+│   └── Model_Data/
 ├── Models/                 # Training scripts + saved .pkl models
 ├── Scripts/                # Helpers (inspect, standalone score)
 ├── Outputs/Reports/        # Streamlit app
@@ -99,10 +105,12 @@ On macOS with XGBoost: `brew install libomp` if import fails.
 
 ### 2. Download data (local only)
 
-Follow [docs/DATA.md](docs/DATA.md). Place files under `Data/`:
+Follow [docs/DATA.md](docs/DATA.md). Download CMS files into:
 
-- `part_d_prescribers.csv`
-- `open_payments.csv`
+- `Data/Original_Datasets/part_d_prescribers.csv`
+- `Data/Original_Datasets/open_payments.csv`
+
+If you still have old flat `Data/*.csv` files, run: `bash Scripts/migrate_data_layout.sh`
 
 **Do not open multi-GB CSVs in Excel** — use:
 
@@ -119,7 +127,7 @@ python run_pipeline.py all
 # or: clean | aggregate | features | score
 ```
 
-Output: `Data/fraud_risk_scored_prescribers.csv`
+Output: `Data/Scored_Datasets/fraud_risk_scored_prescribers.csv`
 
 ### 4. Train models
 

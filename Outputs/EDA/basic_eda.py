@@ -16,9 +16,9 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from config import MERGED_PAYMENT_LEVEL_CSV
+from config import PRESCRIBER_LEVEL_CSV
 
-merged_file = str(MERGED_PAYMENT_LEVEL_CSV)
+merged_file = str(PRESCRIBER_LEVEL_CSV)
 merged_df = spark.read.csv(merged_file, header=True, inferSchema=True)
 
 # -------------------------------

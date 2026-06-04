@@ -1,64 +1,68 @@
 # Data Acquisition Guide
 
-This repository is code-first. Raw CMS datasets are downloaded locally and kept out of git.
+This repository is code-first. All datasets live under `Data/` in **stage folders** (see [`Data/README.md`](../Data/README.md)).
 
-## Required datasets
-
-1. **Medicare Part D Prescriber Public Use File**
-   - Local filename: `Data/part_d_prescribers.csv`
-   - Used by: ETL + feature engineering
-2. **CMS Open Payments (General Payments)**
-   - Local filename: `Data/open_payments.csv`
-   - Used by: payment aggregation + joins
-
-## Expected local structure
+## Folder layout
 
 ```text
 Data/
-  part_d_prescribers.csv
-  open_payments.csv
-  clean_prescribers.csv
-  clean_payments.csv
-  prescriber_level_dataset.csv
-  prescriber_level_enriched.csv
-  fraud_risk_scored_prescribers.csv
-  Model_Data/
+  Original_Datasets/          ← you download CMS files here
+    part_d_prescribers.csv
+    open_payments.csv
+  Cleaned_Datasets/           ← run_pipeline.py clean
+    clean_prescribers.csv
+    clean_payments.csv
+  Aggregated_Datasets/        ← run_pipeline.py aggregate
+    prescriber_level_dataset.csv
+  Enriched_Datasets/          ← run_pipeline.py features
+    prescriber_level_enriched.csv
+  Scored_Datasets/            ← run_pipeline.py score (train ML on this)
+    fraud_risk_scored_prescribers.csv
+  Model_Data/                 ← training outputs (predictions, plots)
+  _Spark_Temp/                ← automatic; safe to delete
 ```
+
+## Required downloads (Original_Datasets)
+
+1. **Medicare Part D Prescriber Public Use File**  
+   → `Data/Original_Datasets/part_d_prescribers.csv`
+
+2. **CMS Open Payments (General Payments)**  
+   → `Data/Original_Datasets/open_payments.csv`
+
+**Sources:**
+
+- Open Payments: <https://openpaymentsdata.cms.gov/>
+- Part D prescribers: <https://data.cms.gov/provider-summary-by-type-of-service/medicare-part-d-prescribers>
 
 ## Approximate sizes
 
-- Raw + processed local `Data/` footprint: ~18 GB
-- Model output artifacts under `Data/Model_Data/`: tens of MB
-
-## Download sources
-
-- CMS Open Payments data explorer/download:  
-  <https://openpaymentsdata.cms.gov/>
-- CMS Medicare Part D Prescriber datasets:  
-  <https://data.cms.gov/provider-summary-by-type-of-service/medicare-part-d-prescribers>
+| Folder | Rough size |
+|--------|------------|
+| Original_Datasets | ~8 GB |
+| Full local `Data/` after pipeline | ~18 GB |
+| Scored_Datasets | ~400 MB |
+| Model_Data | tens of MB |
 
 ## Git policy
 
-- `Data/*` stays ignored by default.
-- `Data/Model_Data/` can be optionally committed for demo purposes.
-- Do not commit PHI/PII-heavy raw files to public repositories.
+- Everything under `Data/` is gitignored except `Model_Data/` (demo artifacts).
+- Do not commit raw CMS files.
 
 ## Do not open huge CSVs in Excel / Cursor preview
 
-Files like `open_payments.csv` (~8 GB) or `merged_payment_level_dataset.csv` (~5 GB) can **freeze or shut down** a laptop if the editor or Excel tries to load them entirely into RAM.
-
-**Safe ways to inspect:**
+Use:
 
 ```bash
 export BASE_DIR="$(pwd)"
-# First 5 rows only
-python Scripts/inspect_csv.py scored --rows 5
 python Scripts/inspect_csv.py raw-payments --rows 3
-
-# Terminal peek (no pandas)
-head -n 3 Data/fraud_risk_scored_prescribers.csv
+python Scripts/inspect_csv.py scored --rows 5
 ```
 
-**For daily work**, you usually only need `fraud_risk_scored_prescribers.csv` (~400 MB). You can delete raw/intermediate files locally after a successful pipeline run (see sizes above) and re-download from CMS when you need a full refresh.
+## Migrating old flat `Data/*.csv` files
 
-**Never double-click** `open_payments.csv` or `merged_payment_level_dataset.csv` on macOS if the default app is Excel or Numbers.
+If files still sit directly under `Data/`, run once from project root:
+
+```bash
+bash Scripts/migrate_data_layout.sh
+```

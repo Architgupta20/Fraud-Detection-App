@@ -1,5 +1,6 @@
 # Large raw/processed datasets (keep locally or use DVC / release assets)
 Data/*
+!Data/README.md
 !Data/Model_Data/
 !Data/Model_Data/.gitkeep
 

@@ -1,0 +1,31 @@
+# Data folder guide
+
+Each pipeline stage has its **own folder**. Files move forward left → right.
+
+```
+Original_Datasets     →  CMS downloads (you add these)
+Cleaned_Datasets      →  after run_pipeline.py clean
+Aggregated_Datasets   →  after aggregate (merged prescriber + payments)
+Enriched_Datasets     →  after features
+Scored_Datasets       →  after score (use this for training + app)
+Model_Data            →  model predictions & charts
+_Spark_Temp           →  auto-deleted temp files (ignore)
+```
+
+## What goes where
+
+| Folder | Files | How created |
+|--------|-------|-------------|
+| **Original_Datasets** | `part_d_prescribers.csv`, `open_payments.csv` | You download from CMS ([docs/DATA.md](../docs/DATA.md)) |
+| **Cleaned_Datasets** | `clean_prescribers.csv`, `clean_payments.csv` | `python run_pipeline.py clean` |
+| **Aggregated_Datasets** | `prescriber_level_dataset.csv` (prescriber + summed payments per NPI) | `python run_pipeline.py aggregate` |
+| **Enriched_Datasets** | `prescriber_level_enriched.csv` | `python run_pipeline.py features` |
+| **Scored_Datasets** | `fraud_risk_scored_prescribers.csv` | `python run_pipeline.py score` |
+| **Model_Data** | `fraud_detection_*.csv`, `confusion_matrix_*.png` | `Models/train_*.py` |
+
+## Quick preview (do not open huge CSVs in Excel)
+
+```bash
+python Scripts/inspect_csv.py scored --rows 5
+python Scripts/inspect_csv.py raw-payments --rows 3
+```
