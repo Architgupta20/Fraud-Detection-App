@@ -137,8 +137,15 @@ except Exception:
     SPARK_AVAILABLE = False
 
 # ---------- STREAMLIT CONFIG ----------
-st.set_page_config(page_title="AI-Based Healthcare Claim Fraud Detection", layout="wide")
-st.title("AI-Based Healthcare Claim Fraud Detection")
+APP_TITLE = "Prescriber Risk Prioritization"
+DISCLAIMER = (
+    "Labels are **rule-based review priority** (Low / High), not confirmed fraud. "
+    "Use this tool to **prioritize human review**, not as legal proof of wrongdoing."
+)
+
+st.set_page_config(page_title=APP_TITLE, layout="wide")
+st.title(APP_TITLE)
+st.info(DISCLAIMER)
 
 # Sidebar (minimal — model outputs live on Explore tab)
 st.sidebar.header("Settings")

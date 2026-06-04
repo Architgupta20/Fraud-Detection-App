@@ -9,3 +9,5 @@ services:
         value: /app
       - key: MODEL_DATA_DIR
         value: /app/Data/Model_Data
+      - key: SKLEARN_MODEL_PATH
+        value: /app/Models/gbt_sklearn.pkl
