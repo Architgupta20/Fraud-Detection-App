@@ -16,24 +16,27 @@ from config import BASE_DIR as _CONFIG_BASE_DIR
 from config import GBT_SKLEARN_PKL
 from config import MODEL_DATA_DIR as _CONFIG_MODEL_DATA_DIR
 from config import SPARK_PIPELINE_MODEL_DIR
-from risk_rules import CLASS_NAMES, INV_LABEL_MAP
+from config import XGB_CALIBRATED_PKL
+from risk_rules import CLASS_NAMES, INV_LABEL_MAP, ML_FEATURE_COLS
 
 BASE_DIR = os.getenv("BASE_DIR", str(_CONFIG_BASE_DIR))
 MODEL_PATH = os.getenv("MODEL_PATH", str(SPARK_PIPELINE_MODEL_DIR))
 MODEL_DATA_DIR = os.getenv("MODEL_DATA_DIR", str(_CONFIG_MODEL_DATA_DIR))
 SKLEARN_MODEL_PATH = os.getenv("SKLEARN_MODEL_PATH", str(GBT_SKLEARN_PKL))
+XGB_MODEL_PATH = os.getenv("XGB_MODEL_PATH", str(XGB_CALIBRATED_PKL))
 
-# ---------- FALLBACKS ----------
-PREDICTIONS_FILES = [
-    "fraud_detection_xgb_predictions.csv",
-    "fraud_detection_gbt_sklearn_predictions.csv",
-]
-FALLBACK_PREDICTIONS = next(
-    (os.path.join(MODEL_DATA_DIR, p)
-     for p in PREDICTIONS_FILES
-     if os.path.exists(os.path.join(MODEL_DATA_DIR, p))),
-    None
-)
+PREDICTIONS_FILES = {
+    "xgb": "fraud_detection_xgb_predictions.csv",
+    "sklearn": "fraud_detection_gbt_sklearn_predictions.csv",
+}
+
+
+def _predictions_path(key: str) -> Optional[str]:
+    name = PREDICTIONS_FILES.get(key)
+    if not name:
+        return None
+    path = os.path.join(MODEL_DATA_DIR, name)
+    return path if os.path.exists(path) else None
 
 FOUND_CONFUSION_IMG = None  # optional; add PNG paths under Model_Data/ if you save plots from training
 
@@ -137,34 +140,29 @@ except Exception:
 st.set_page_config(page_title="AI-Based Healthcare Claim Fraud Detection", layout="wide")
 st.title("AI-Based Healthcare Claim Fraud Detection")
 
-# Sidebar
+# Sidebar (minimal — model outputs live on Explore tab)
 st.sidebar.header("Settings")
-sklearn_available = os.path.exists(SKLEARN_MODEL_PATH)
-use_sklearn = st.sidebar.checkbox(
-    "Use sklearn model (recommended)",
-    value=sklearn_available,
-    disabled=not sklearn_available,
-)
 use_spark = st.sidebar.checkbox(
     "Load Spark model (heavy)",
     value=False,
     disabled=not SPARK_AVAILABLE,
 )
-use_csv_fallback = st.sidebar.checkbox(
-    "Use CSV predictions fallback",
-    value=bool(FALLBACK_PREDICTIONS) and not sklearn_available,
-)
 
-# ---------- LOAD MODEL ----------
-pipeline_model, spark, predictions_df, sklearn_bundle = None, None, None, None
+xgb_available = os.path.exists(XGB_MODEL_PATH)
+sklearn_available = os.path.exists(SKLEARN_MODEL_PATH)
 
-if use_sklearn and sklearn_available:
+# ---------- LOAD MODEL (XGB preferred for Single / Batch tabs) ----------
+pipeline_model, spark, ml_bundle = None, None, None
+
+if xgb_available:
     try:
-        with st.spinner("Loading sklearn model..."):
-            sklearn_bundle = joblib.load(SKLEARN_MODEL_PATH)
+        ml_bundle = joblib.load(XGB_MODEL_PATH)
     except Exception as e:
-        sklearn_bundle = None
-        use_sklearn = False
+        st.sidebar.error(f"Failed to load XGBoost model: {e}")
+elif sklearn_available:
+    try:
+        ml_bundle = joblib.load(SKLEARN_MODEL_PATH)
+    except Exception as e:
         st.sidebar.error(f"Failed to load sklearn model: {e}")
 
 if use_spark and SPARK_AVAILABLE and os.path.exists(MODEL_PATH):
@@ -180,14 +178,41 @@ if use_spark and SPARK_AVAILABLE and os.path.exists(MODEL_PATH):
         use_spark = False
         st.sidebar.error(f"Failed to load Spark model: {e}")
 
-# ---------- LOAD CSV FALLBACK ----------
-if use_csv_fallback and FALLBACK_PREDICTIONS:
+
+@st.cache_data(show_spinner="Loading predictions CSV...")
+def load_predictions_csv(csv_path: str) -> pd.DataFrame:
+    df = pd.read_csv(csv_path)
+    if "prescriber_id" in df.columns:
+        df["prescriber_id"] = df["prescriber_id"].astype(str)
+    return df
+
+
+def render_explore_model_outputs(model_key: str, label: str) -> None:
+    """Show precomputed predictions for one trained model."""
+    path = _predictions_path(model_key)
+    if not path:
+        st.warning(f"No predictions file for {label}. Run the matching train script.")
+        return
     try:
-        predictions_df = pd.read_csv(FALLBACK_PREDICTIONS)
+        df = load_predictions_csv(path)
     except Exception as e:
-        predictions_df = None
-        use_csv_fallback = False
-        st.sidebar.error(f"Failed to load fallback CSV: {e}")
+        st.error(f"Could not load {PREDICTIONS_FILES[model_key]}: {e}")
+        return
+    st.caption(f"{len(df):,} rows · `{PREDICTIONS_FILES[model_key]}`")
+    lookup_npi = st.text_input(
+        "Filter by prescriber_id (optional)",
+        key=f"explore_npi_{model_key}",
+    )
+    if lookup_npi.strip():
+        view_df = df[df["prescriber_id"] == lookup_npi.strip()]
+        if view_df.empty:
+            st.warning("No rows for that prescriber_id.")
+        else:
+            st.dataframe(view_df, use_container_width=True)
+    else:
+        st.dataframe(df.head(100), use_container_width=True)
+        if "predicted_category" in df.columns:
+            st.bar_chart(df["predicted_category"].value_counts())
 
 # ---------- HELPER FUNCTIONS ----------
 def map_label_to_category(label_val):
@@ -302,7 +327,7 @@ def render_why_flagged(row: Dict, bundle: Optional[Dict] = None):
         st.dataframe(get_top_model_features(row, bundle), hide_index=True, use_container_width=True)
 
 
-def predict_with_sklearn_single(row_dict: Dict, bundle: Dict) -> Dict:
+def predict_with_ml_bundle_single(row_dict: Dict, bundle: Dict) -> Dict:
     feature_cols = bundle["feature_cols"]
     scaler = bundle["scaler"]
     model = bundle["model"]
@@ -317,7 +342,7 @@ def predict_with_sklearn_single(row_dict: Dict, bundle: Dict) -> Dict:
     }
 
 
-def predict_with_sklearn_batch(pdf: pd.DataFrame, bundle: Dict) -> pd.DataFrame:
+def predict_with_ml_bundle_batch(pdf: pd.DataFrame, bundle: Dict) -> pd.DataFrame:
     feature_cols = bundle["feature_cols"]
     scaler = bundle["scaler"]
     model = bundle["model"]
@@ -399,16 +424,6 @@ def predict_with_pipeline_single(row_dict: Dict):
         "original_label": row.get("fraud_risk_category")
     }
 
-def predict_with_csv_model(pdf: pd.DataFrame):
-    if predictions_df is None:
-        raise RuntimeError("No fallback predictions CSV loaded.")
-    if "prescriber_id" not in pdf.columns:
-        raise ValueError("Uploaded CSV must contain 'prescriber_id'.")
-    merged = pdf.merge(predictions_df, on="prescriber_id", how="left")
-    if "predicted_category" not in merged.columns and "prediction" in merged.columns:
-        merged["predicted_category"] = merged["prediction"].apply(map_label_to_category)
-    return merged
-
 # ---------- UI ----------
 tab1, tab2, tab3 = st.tabs(["Single Prediction", "Batch Prediction (CSV Upload)", "Explore Model Outputs"])
 
@@ -426,7 +441,14 @@ with tab1:
 
     with right_col:
         numeric_inputs_raw = {}
-        st.caption("Enter values manually. Placeholder shows valid range; hover ? for meaning.")
+        model_feats = (
+            ml_bundle.get("feature_cols", ML_FEATURE_COLS) if ml_bundle else ML_FEATURE_COLS
+        )
+        st.caption(
+            "Model uses: "
+            + ", ".join(model_feats)
+            + ". Other fields help explain rule signals."
+        )
         for f in FEATURE_COLS:
             min_v, max_v, _, _ = FEATURE_RANGES.get(f, (0.0, 1_000_000.0, 0.0, 0.1))
             desc = FEATURE_DESCRIPTIONS.get(f, "No description available.")
@@ -454,38 +476,30 @@ with tab1:
                 st.stop()
             row.update(numeric_inputs)
             try:
-                if use_sklearn and sklearn_bundle is not None:
-                    pred = predict_with_sklearn_single(row, sklearn_bundle)
+                if ml_bundle is not None:
+                    pred = predict_with_ml_bundle_single(row, ml_bundle)
                     st.success(f"Predicted Category: {pred['predicted_category']}")
                     st.write("Numeric Label:", pred["prediction"])
-                    nc = sklearn_bundle.get("num_classes", len(pred["probability"]))
+                    nc = ml_bundle.get("num_classes", len(pred["probability"]))
                     st.write("Probabilities:", format_probabilities(pred["probability"], nc))
-                    render_why_flagged(row, sklearn_bundle)
+                    render_why_flagged(row, ml_bundle)
                 elif use_spark and pipeline_model is not None:
                     pred = predict_with_pipeline_single(row)
                     st.success(f"Predicted Category: {pred['predicted_category']}")
                     st.write("Numeric Label:", pred["prediction"])
                     st.write("Probabilities:", format_probabilities(pred.get("probability")))
                     render_why_flagged(row)
-                elif predictions_df is not None:
-                    if prescriber_id:
-                        matched = predictions_df[predictions_df["prescriber_id"].astype(str) == str(prescriber_id)]
-                        if not matched.empty:
-                            st.dataframe(matched.T)
-                            render_why_flagged(row)
-                        else:
-                            st.warning("No match found in precomputed predictions CSV.")
-                    else:
-                        st.warning("Provide prescriber_id for lookup in fallback CSV.")
                 else:
-                    st.warning("No model or fallback CSV available.")
+                    st.warning(
+                        "No live model loaded. Run Models/train_xgb.py or train_sklearn.py."
+                    )
             except Exception as e:
                 st.error(f"Prediction failed: {e}")
 
 st.markdown("### Notes")
 st.markdown(
     "- Enter prescriber details and numeric features, then click **Predict**.\n"
-    "- If Spark is not loaded, use CSV fallback under **Batch Prediction (CSV Upload)** tab.\n"
+    "- **Explore Model Outputs** uses sub-tabs for XGBoost vs sklearn prediction files.\n"
     "- Rule labels (v2.1): **Low** (0–1 risk points), **High** (≥ 2 points).\n"
     "- ML categories: Low = 0, High = 1 (`p_low`, `p_high` on batch export)."
 )
@@ -499,8 +513,8 @@ with tab2:
         try:
             uploaded_df = pd.read_csv(uploaded_file)
             st.write(f"Uploaded {len(uploaded_df)} rows.")
-            if use_sklearn and sklearn_bundle is not None:
-                pdf_out = predict_with_sklearn_batch(uploaded_df, sklearn_bundle)
+            if ml_bundle is not None:
+                pdf_out = predict_with_ml_bundle_batch(uploaded_df, ml_bundle)
                 st.dataframe(pdf_out.head(200))
                 st.download_button(
                     "Download Predictions",
@@ -516,17 +530,33 @@ with tab2:
                     pdf_out["predicted_category"] = pdf_out["prediction"].apply(map_label_to_category)
                 st.dataframe(pdf_out.head(200))
                 st.download_button("Download Predictions", pdf_out.to_csv(index=False).encode("utf-8"), "predictions.csv")
-            elif predictions_df is not None:
-                merged = predict_with_csv_model(uploaded_df)
-                st.dataframe(merged.head(200))
-                st.download_button("Download Results", merged.to_csv(index=False).encode("utf-8"), "predictions_joined.csv")
+            else:
+                st.warning("No live model loaded. Run training first.")
         except Exception as e:
             st.error(f"Upload failed: {e}")
 
 # --- TAB 3: EXPLORE OUTPUTS ---
 with tab3:
     st.header("Explore Model Outputs")
-    if predictions_df is not None:
-        st.dataframe(predictions_df.head(50))
+    explore_models: List[Tuple[str, str]] = []
+    if _predictions_path("xgb"):
+        explore_models.append(("xgb", "XGBoost"))
+    if _predictions_path("sklearn"):
+        explore_models.append(("sklearn", "sklearn GBT"))
+
+    if not explore_models:
+        st.warning(
+            "No predictions CSV found under `Data/Model_Data/`. "
+            "Run `Models/train_xgb.py` and/or `Models/train_sklearn.py`, then refresh."
+        )
+    elif len(explore_models) == 1:
+        key, label = explore_models[0]
+        render_explore_model_outputs(key, label)
+    else:
+        mini_tabs = st.tabs([label for _, label in explore_models])
+        for (key, label), mini_tab in zip(explore_models, mini_tabs):
+            with mini_tab:
+                render_explore_model_outputs(key, label)
+
     if FOUND_CONFUSION_IMG:
         st.image(FOUND_CONFUSION_IMG, caption="Confusion Matrix")
