@@ -195,10 +195,7 @@ def map_label_to_category(label_val):
         val = int(float(label_val))
     except Exception:
         return str(label_val)
-    if val in INV_LABEL_MAP:
-        return INV_LABEL_MAP[val]
-    # Legacy 3-class Spark / old predictions
-    return {0: "Low", 1: "Medium", 2: "High"}.get(val, str(val))
+    return INV_LABEL_MAP.get(val, str(val))
 
 
 def format_probabilities(probs, num_classes: Optional[int] = None) -> str:
@@ -208,8 +205,6 @@ def format_probabilities(probs, num_classes: Optional[int] = None) -> str:
     n = num_classes or len(vec)
     if n == 2 and len(vec) >= 2:
         return ", ".join(f"{name}: {vec[i]:.3f}" for i, name in enumerate(CLASS_NAMES))
-    if n >= 3 and len(vec) >= 3:
-        return f"Low: {vec[0]:.3f}, Medium: {vec[1]:.3f}, High: {vec[2]:.3f}"
     return str([round(p, 4) for p in vec])
 
 def softmax(arr):
@@ -333,14 +328,9 @@ def predict_with_sklearn_batch(pdf: pd.DataFrame, bundle: Dict) -> pd.DataFrame:
     out = pdf.copy()
     out["prediction"] = preds
     out["predicted_category"] = [map_label_to_category(p) for p in preds]
-    nc = probs.shape[1]
-    if nc == 2:
+    if probs.shape[1] >= 2:
         out["p_low"] = probs[:, 0]
         out["p_high"] = probs[:, 1]
-    elif nc >= 3:
-        out["p_low"] = probs[:, 0]
-        out["p_medium"] = probs[:, 1]
-        out["p_high"] = probs[:, 2]
     return out
 
 
@@ -497,8 +487,7 @@ st.markdown(
     "- Enter prescriber details and numeric features, then click **Predict**.\n"
     "- If Spark is not loaded, use CSV fallback under **Batch Prediction (CSV Upload)** tab.\n"
     "- Rule labels (v2.1): **Low** (0–1 risk points), **High** (≥ 2 points).\n"
-    "- ML categories: Low = 0, High = 1 (`p_low`, `p_high` on batch export).\n"
-    "- Older 3-class models may still show Medium in legacy Spark outputs."
+    "- ML categories: Low = 0, High = 1 (`p_low`, `p_high` on batch export)."
 )
 
 # --- TAB 2: BATCH PREDICTION ---

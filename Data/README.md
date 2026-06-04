@@ -20,8 +20,14 @@ _Spark_Temp           →  auto-deleted temp files (ignore)
 | **Cleaned_Datasets** | `clean_prescribers.csv`, `clean_payments.csv` | `python run_pipeline.py clean` |
 | **Aggregated_Datasets** | `prescriber_level_dataset.csv` (prescriber + summed payments per NPI) | `python run_pipeline.py aggregate` |
 | **Enriched_Datasets** | `prescriber_level_enriched.csv` | `python run_pipeline.py features` |
-| **Scored_Datasets** | `fraud_risk_scored_prescribers.csv` | `python run_pipeline.py score` |
-| **Model_Data** | `fraud_detection_xgb_predictions.csv`, `fraud_detection_gbt_sklearn_predictions.csv` | `Models/train_*.py` |
+| **Scored_Datasets** | `fraud_risk_scored_prescribers.csv` (Low/High only, `rules_version` 2.1.0) | `python run_pipeline.py score` |
+| **Model_Data** | `fraud_detection_xgb_predictions.csv`, `fraud_detection_gbt_sklearn_predictions.csv` | `Models/train_*.py` after a fresh scored file |
+
+If you still have old **Low/Medium/High** scored or prediction files, delete them and re-run score + train:
+
+```bash
+bash Scripts/remove_legacy_3class_artifacts.sh
+```
 
 ## Quick preview (do not open huge CSVs in Excel)
 

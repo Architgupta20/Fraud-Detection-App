@@ -59,8 +59,13 @@ def load_and_preprocess(
         print(f"Sampling fraction {sample_frac} of {len(df)} rows...")
         df = df.sample(frac=sample_frac, random_state=random_state)
     df = df[df[LABEL_COL].notnull()].copy()
-    # Legacy 3-class scored files: Medium (2–3 pts) → High under v2.1 binary rules
-    df[LABEL_COL] = df[LABEL_COL].replace({"Medium": "High"})
+    invalid = ~df[LABEL_COL].isin(LABEL_MAP.keys())
+    if invalid.any():
+        bad = df.loc[invalid, LABEL_COL].value_counts().head(5).to_dict()
+        raise ValueError(
+            f"Scored CSV contains non-binary labels (expected {list(LABEL_MAP)}). "
+            f"Found examples: {bad}. Re-run: python run_pipeline.py score"
+        )
     df = df[df[LABEL_COL].isin(LABEL_MAP.keys())].copy()
     for c in FEATURE_COLS:
         if c not in df.columns:
