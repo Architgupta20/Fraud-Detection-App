@@ -1,21 +1,24 @@
-# Risk rules (product v2)
+# Risk rules (product v2.1 — binary)
 
 Rules define **investigation priority**, not confirmed fraud.  
 Implementation: `risk_rules.py` (used by `run_pipeline.py score`).
 
-**Current version:** `2.0.0` (column `rules_version` on scored output)
+**Current version:** `2.1.0` (column `rules_version` on scored output)
 
 ## Scoring model
 
 - Each rule adds **points** when true (multiple rules can fire).
 - `rules_fired` = pipe-separated rule IDs, e.g. `payment_ratio_high|opioid_volume_high`
-- `risk_points` = sum of points (alias: `fraud_risk_score` for backward compatibility)
+- `risk_points` = sum of points (alias: `fraud_risk_score`)
 
-| Points total | Category |
-|--------------|----------|
-| ≥ 4 | **High** |
-| 2–3 | **Medium** |
-| 0–1 | **Low** |
+### Binary categories (option B)
+
+| Points | Category | Meaning |
+|--------|----------|---------|
+| **0–1** | **Low** | Not priority for review queue |
+| **≥ 2** | **High** | Needs review (includes former Medium 2–3 and High 4+) |
+
+v2.0 used three tiers (High ≥4, Medium 2–3, Low 0–1). v2.1 collapses to **Low / High** for clearer triage and ML.
 
 ## Rules
 
@@ -31,15 +34,11 @@ Implementation: `risk_rules.py` (used by `run_pipeline.py score`).
 | `elderly_focus` | 1 | `elderly_focus_flag` = 1 (avg patient age > 70) |
 | `total_payments_high` | 1 | `total_payment_amount` > $50,000 **or** ≥ 95th pct within `provider_type` |
 
-Percentile flags stored on scored CSV: `opioid_volume_pct_flag`, `peer_outlier_pct_flag`, `payment_spiky_pct_flag`, `total_payments_pct_flag`.
-
 ## ML training
 
-All trainers import **`ML_FEATURE_COLS`** and **`LABEL_COL`** from `risk_rules.py` (via `Models/ml_common.py` for sklearn/XGB).
+All trainers import **`ML_FEATURE_COLS`** and **`LABEL_MAP`** (`Low`=0, `High`=1) from `risk_rules.py` via `Models/ml_common.py`.
 
-Do **not** duplicate feature lists in training scripts.
-
-After changing rules in `risk_rules.py`:
+After changing rules:
 
 ```bash
 export BASE_DIR="$(pwd)"
@@ -48,11 +47,10 @@ python Models/train_xgb.py --sample-frac 1.0 --strict-rules-version
 python Models/train_sklearn.py --sample-frac 1.0 --strict-rules-version
 ```
 
-`--strict-rules-version` fails if the scored CSV was built with an older `rules_version`.
-
 ## Change log
 
 | Version | Notes |
 |---------|--------|
 | 1.x | First-match `when` chain; score 0/1/2 only |
-| 2.0.0 | Additive points, `rules_fired`, peer percentiles, new antibiotic/payment rules |
+| 2.0.0 | Additive points, `rules_fired`, peer percentiles |
+| 2.1.0 | **Binary Low/High** — `risk_points >= 2` → High |

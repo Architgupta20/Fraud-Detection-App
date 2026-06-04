@@ -34,7 +34,7 @@ from sklearn.metrics import classification_report, confusion_matrix, f1_score, p
 from config import FRAUD_RISK_SCORED_CSV, GBT_SKLEARN_PKL, model_data_path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ml_common import FEATURE_COLS, INV_LABEL_MAP, holdout_split, load_and_preprocess
+from ml_common import CLASS_NAMES, FEATURE_COLS, INV_LABEL_MAP, NUM_CLASSES, holdout_split, load_and_preprocess
 
 INPUT_CSV = str(FRAUD_RISK_SCORED_CSV)
 OUT_MODEL = str(GBT_SKLEARN_PKL)
@@ -77,21 +77,28 @@ def main(args):
     val_pred = clf.predict(X_val_s)
     acc = (val_pred == y_val).mean()
     macro_f1 = f1_score(y_val, val_pred, average="macro")
+    label_ids = list(range(NUM_CLASSES))
     per_p, per_r, per_f1, _ = precision_recall_fscore_support(
-        y_val, val_pred, labels=[0, 1, 2], zero_division=0
+        y_val, val_pred, labels=label_ids, zero_division=0
     )
     print(f"Validation accuracy: {acc:.4f}")
     print(f"Validation macro-F1: {macro_f1:.4f}")
     print("Per-class metrics:")
-    for lbl, p, r, f in zip(["Low", "Medium", "High"], per_p, per_r, per_f1):
+    for lbl, p, r, f in zip(CLASS_NAMES, per_p, per_r, per_f1):
         print(f"  {lbl:<6} Precision={p:.3f} Recall={r:.3f} F1={f:.3f}")
     print("\nDetailed classification report:")
-    print(classification_report(y_val, val_pred, target_names=["Low", "Medium", "High"]))
+    print(classification_report(y_val, val_pred, target_names=CLASS_NAMES))
     print("\nConfusion matrix:")
     print(confusion_matrix(y_val, val_pred))
 
     # Save model object (scaler + model + feature list)
-    model_obj = {"scaler": scaler, "model": clf, "feature_cols": FEATURE_COLS}
+    model_obj = {
+        "scaler": scaler,
+        "model": clf,
+        "feature_cols": FEATURE_COLS,
+        "label_map": INV_LABEL_MAP,
+        "num_classes": NUM_CLASSES,
+    }
     os.makedirs(os.path.dirname(OUT_MODEL), exist_ok=True)
     joblib.dump(model_obj, OUT_MODEL)
     print("Saved sklearn model to:", OUT_MODEL)
@@ -123,14 +130,14 @@ def main(args):
     else:
         prescriber_series = prescriber_series.astype(str).reset_index(drop=True)
 
-    out_df = pd.DataFrame({
+    out_cols = {
         "prescriber_id": prescriber_series,
         "prediction": preds,
         "predicted_category": pd.Series(preds).map(INV_LABEL_MAP),
-        "p_low": probs[:, 0],
-        "p_medium": probs[:, 1],
-        "p_high": probs[:, 2]
-    })
+    }
+    for i, name in enumerate(CLASS_NAMES):
+        out_cols[f"p_{name.lower()}"] = probs[:, i]
+    out_df = pd.DataFrame(out_cols)
 
     os.makedirs(os.path.dirname(OUT_PRED_CSV), exist_ok=True)
     out_df.to_csv(OUT_PRED_CSV, index=False)

@@ -12,12 +12,17 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, List, Tuple
 
-RULES_VERSION = "2.0.0"
+RULES_VERSION = "2.1.0"
 
-# --- Labels produced by scoring (training targets) ---
+# --- Labels produced by scoring (binary review priority) ---
 LABEL_COL = "fraud_risk_category"
-LABEL_MAP = {"Low": 0, "Medium": 1, "High": 2}
-INV_LABEL_MAP = {0: "Low", 1: "Medium", 2: "High"}
+LABEL_MAP = {"Low": 0, "High": 1}
+INV_LABEL_MAP = {0: "Low", 1: "High"}
+CLASS_NAMES = [INV_LABEL_MAP[i] for i in sorted(INV_LABEL_MAP)]
+NUM_CLASSES = len(CLASS_NAMES)
+
+# Option B: former Medium (2–3 pts) and High (4+ pts) → High; 0–1 pts → Low
+REVIEW_PRIORITY_MIN_POINTS = 2
 
 # Columns that define rules / labels — never use as ML features
 RULE_INPUT_COLUMNS: List[str] = [
@@ -73,9 +78,6 @@ ANTIBIOTIC_RATIO_HIGH = 0.25
 ANTIBIOTIC_CLAIMS_MIN = 50
 TOTAL_PAYMENT_ABSOLUTE = 50_000.0
 PERCENTILE_CUTOFF = 0.95
-
-HIGH_CATEGORY_MIN_POINTS = 4
-MEDIUM_CATEGORY_MIN_POINTS = 2
 
 # rule_id -> points when fired
 RULE_POINTS: Dict[str, int] = {
@@ -190,10 +192,9 @@ def _rule_detail(rule_id: str, row: Dict[str, Any]) -> str:
 
 
 def category_from_points(points: int) -> str:
-    if points >= HIGH_CATEGORY_MIN_POINTS:
+    """Map rule points to binary review priority (>= REVIEW_PRIORITY_MIN_POINTS → High)."""
+    if points >= REVIEW_PRIORITY_MIN_POINTS:
         return "High"
-    if points >= MEDIUM_CATEGORY_MIN_POINTS:
-        return "Medium"
     return "Low"
 
 
@@ -297,9 +298,7 @@ def apply_risk_scoring_spark(df: "Any") -> "Any":
 
     df = df.withColumn(
         "fraud_risk_category",
-        when(col("risk_points") >= lit(HIGH_CATEGORY_MIN_POINTS), lit("High"))
-        .when(col("risk_points") >= lit(MEDIUM_CATEGORY_MIN_POINTS), lit("Medium"))
-        .otherwise(lit("Low")),
+        when(col("risk_points") >= lit(REVIEW_PRIORITY_MIN_POINTS), lit("High")).otherwise(lit("Low")),
     )
     # Backward-compatible alias used by older scripts / ML labels
     df = df.withColumn("fraud_risk_score", col("risk_points"))

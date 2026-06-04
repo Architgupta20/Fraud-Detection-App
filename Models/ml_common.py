@@ -10,10 +10,12 @@ import numpy as np
 import pandas as pd
 
 from risk_rules import (
+    CLASS_NAMES,
     INV_LABEL_MAP,
     LABEL_COL,
     LABEL_MAP,
     ML_FEATURE_COLS,
+    NUM_CLASSES,
     RULES_VERSION,
     check_scored_rules_version,
 )
@@ -57,6 +59,9 @@ def load_and_preprocess(
         print(f"Sampling fraction {sample_frac} of {len(df)} rows...")
         df = df.sample(frac=sample_frac, random_state=random_state)
     df = df[df[LABEL_COL].notnull()].copy()
+    # Legacy 3-class scored files: Medium (2–3 pts) → High under v2.1 binary rules
+    df[LABEL_COL] = df[LABEL_COL].replace({"Medium": "High"})
+    df = df[df[LABEL_COL].isin(LABEL_MAP.keys())].copy()
     for c in FEATURE_COLS:
         if c not in df.columns:
             df[c] = 0.0

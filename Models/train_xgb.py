@@ -34,8 +34,10 @@ from config import FRAUD_RISK_SCORED_CSV, XGB_CALIBRATED_PKL, model_data_path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ml_common import (
+    CLASS_NAMES,
     FEATURE_COLS,
     INV_LABEL_MAP,
+    NUM_CLASSES,
     holdout_split,
     load_and_preprocess,
 )
@@ -47,17 +49,18 @@ OUT_PRED_CSV = str(model_data_path("fraud_detection_xgb_predictions.csv"))
 
 def print_metrics(y_true, y_pred, title: str) -> float:
     macro_f1 = f1_score(y_true, y_pred, average="macro")
+    label_ids = list(range(NUM_CLASSES))
     per_p, per_r, per_f1, _ = precision_recall_fscore_support(
-        y_true, y_pred, labels=[0, 1, 2], zero_division=0
+        y_true, y_pred, labels=label_ids, zero_division=0
     )
     print(f"\n===== {title} =====")
     print(f"Accuracy: {(y_pred == y_true).mean():.4f}")
     print(f"Macro-F1: {macro_f1:.4f}")
     print("Per-class metrics:")
-    for lbl, p, r, f in zip(["Low", "Medium", "High"], per_p, per_r, per_f1):
+    for lbl, p, r, f in zip(CLASS_NAMES, per_p, per_r, per_f1):
         print(f"  {lbl:<6} Precision={p:.3f} Recall={r:.3f} F1={f:.3f}")
     print("\nClassification report:")
-    print(classification_report(y_true, y_pred, target_names=["Low", "Medium", "High"]))
+    print(classification_report(y_true, y_pred, target_names=CLASS_NAMES))
     print("Confusion matrix:")
     print(confusion_matrix(y_true, y_pred))
     return macro_f1
@@ -91,9 +94,8 @@ def main(args: argparse.Namespace) -> None:
         learning_rate=args.learning_rate,
         subsample=0.8,
         colsample_bytree=0.8,
-        objective="multi:softprob",
-        num_class=3,
-        eval_metric="mlogloss",
+        objective="binary:logistic" if NUM_CLASSES == 2 else "multi:softprob",
+        eval_metric="logloss",
         random_state=args.random_state,
         n_jobs=-1,
     )
@@ -115,6 +117,8 @@ def main(args: argparse.Namespace) -> None:
         "model": model,
         "feature_cols": FEATURE_COLS,
         "calibrated": args.calibrate,
+        "label_map": INV_LABEL_MAP,
+        "num_classes": NUM_CLASSES,
     }
     os.makedirs(os.path.dirname(OUT_MODEL), exist_ok=True)
     joblib.dump(bundle, OUT_MODEL)
@@ -131,14 +135,14 @@ def main(args: argparse.Namespace) -> None:
     else:
         prescriber_series = prescriber_series.astype(str).reset_index(drop=True)
 
-    out_df = pd.DataFrame({
+    out_cols = {
         "prescriber_id": prescriber_series,
         "prediction": preds.astype(int),
         "predicted_category": pd.Series(preds).map(INV_LABEL_MAP),
-        "p_low": probs[:, 0],
-        "p_medium": probs[:, 1],
-        "p_high": probs[:, 2],
-    })
+    }
+    for i, name in enumerate(CLASS_NAMES):
+        out_cols[f"p_{name.lower()}"] = probs[:, i]
+    out_df = pd.DataFrame(out_cols)
     os.makedirs(os.path.dirname(OUT_PRED_CSV), exist_ok=True)
     out_df.to_csv(OUT_PRED_CSV, index=False)
     print(f"Saved predictions: {OUT_PRED_CSV}")

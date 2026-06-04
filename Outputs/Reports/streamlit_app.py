@@ -16,6 +16,7 @@ from config import BASE_DIR as _CONFIG_BASE_DIR
 from config import GBT_SKLEARN_PKL
 from config import MODEL_DATA_DIR as _CONFIG_MODEL_DATA_DIR
 from config import SPARK_PIPELINE_MODEL_DIR
+from risk_rules import CLASS_NAMES, INV_LABEL_MAP
 
 BASE_DIR = os.getenv("BASE_DIR", str(_CONFIG_BASE_DIR))
 MODEL_PATH = os.getenv("MODEL_PATH", str(SPARK_PIPELINE_MODEL_DIR))
@@ -191,10 +192,25 @@ if use_csv_fallback and FALLBACK_PREDICTIONS:
 # ---------- HELPER FUNCTIONS ----------
 def map_label_to_category(label_val):
     try:
-        val = float(label_val)
+        val = int(float(label_val))
     except Exception:
         return str(label_val)
-    return {0.0: "Low", 1.0: "Medium", 2.0: "High"}.get(val, str(val))
+    if val in INV_LABEL_MAP:
+        return INV_LABEL_MAP[val]
+    # Legacy 3-class Spark / old predictions
+    return {0: "Low", 1: "Medium", 2: "High"}.get(val, str(val))
+
+
+def format_probabilities(probs, num_classes: Optional[int] = None) -> str:
+    if not probs:
+        return "Unavailable"
+    vec = [float(p) for p in probs]
+    n = num_classes or len(vec)
+    if n == 2 and len(vec) >= 2:
+        return ", ".join(f"{name}: {vec[i]:.3f}" for i, name in enumerate(CLASS_NAMES))
+    if n >= 3 and len(vec) >= 3:
+        return f"Low: {vec[0]:.3f}, Medium: {vec[1]:.3f}, High: {vec[2]:.3f}"
+    return str([round(p, 4) for p in vec])
 
 def softmax(arr):
     import math
@@ -317,7 +333,11 @@ def predict_with_sklearn_batch(pdf: pd.DataFrame, bundle: Dict) -> pd.DataFrame:
     out = pdf.copy()
     out["prediction"] = preds
     out["predicted_category"] = [map_label_to_category(p) for p in preds]
-    if probs.shape[1] >= 3:
+    nc = probs.shape[1]
+    if nc == 2:
+        out["p_low"] = probs[:, 0]
+        out["p_high"] = probs[:, 1]
+    elif nc >= 3:
         out["p_low"] = probs[:, 0]
         out["p_medium"] = probs[:, 1]
         out["p_high"] = probs[:, 2]
@@ -448,14 +468,14 @@ with tab1:
                     pred = predict_with_sklearn_single(row, sklearn_bundle)
                     st.success(f"Predicted Category: {pred['predicted_category']}")
                     st.write("Numeric Label:", pred["prediction"])
-                    st.write("Probabilities (Low, Medium, High):", pred["probability"])
+                    nc = sklearn_bundle.get("num_classes", len(pred["probability"]))
+                    st.write("Probabilities:", format_probabilities(pred["probability"], nc))
                     render_why_flagged(row, sklearn_bundle)
                 elif use_spark and pipeline_model is not None:
                     pred = predict_with_pipeline_single(row)
                     st.success(f"Predicted Category: {pred['predicted_category']}")
                     st.write("Numeric Label:", pred["prediction"])
-                    st.write("Probabilities (Low, Medium, High):")
-                    st.write(pred["probability"] if pred["probability"] else "Unavailable")
+                    st.write("Probabilities:", format_probabilities(pred.get("probability")))
                     render_why_flagged(row)
                 elif predictions_df is not None:
                     if prescriber_id:
@@ -476,8 +496,9 @@ st.markdown("### Notes")
 st.markdown(
     "- Enter prescriber details and numeric features, then click **Predict**.\n"
     "- If Spark is not loaded, use CSV fallback under **Batch Prediction (CSV Upload)** tab.\n"
-    "- Categories: Low = 0, Medium = 1, High = 2.\n"
-    "- Probabilities are shown as `[p_low, p_medium, p_high]`."
+    "- Rule labels (v2.1): **Low** (0–1 risk points), **High** (≥ 2 points).\n"
+    "- ML categories: Low = 0, High = 1 (`p_low`, `p_high` on batch export).\n"
+    "- Older 3-class models may still show Medium in legacy Spark outputs."
 )
 
 # --- TAB 2: BATCH PREDICTION ---

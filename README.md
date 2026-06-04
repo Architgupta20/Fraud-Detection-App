@@ -2,7 +2,7 @@
 
 Analyze **Medicare Part D prescribers** together with **CMS Open Payments** to build risk profiles, apply transparent scoring rules, train machine learning models, and explore results in a **Streamlit** web app.
 
-> **Disclaimer:** Labels are **rule-based risk tiers** (Low / Medium / High), not confirmed fraud. Use this system to **prioritize human review**, not as legal proof of wrongdoing.
+> **Disclaimer:** Labels are **rule-based review priority** (Low / High), not confirmed fraud. Use this system to **prioritize human review**, not as legal proof of wrongdoing.
 
 **Repository:** [github.com/Architgupta20/Fraud-Detection-App](https://github.com/Architgupta20/Fraud-Detection-App)
 
@@ -150,17 +150,18 @@ Open http://localhost:8501
 
 ---
 
-## Risk rules (v2)
+## Risk rules (v2.1)
 
-Rules are **additive** — multiple signals can fire. Each adds points; category is from the total.
+Rules are **additive** — multiple signals can fire. Each adds points; **review category** is binary (option B):
 
-| Category | Points |
-|----------|--------|
-| **High** | ≥ 4 |
-| **Medium** | 2–3 |
-| **Low** | 0–1 |
+| Category | Points | Meaning |
+|----------|--------|---------|
+| **Low** | 0–1 | Not on the priority review queue |
+| **High** | ≥ 2 | Needs review (covers former Medium 2–3 and High 4+ tiers) |
 
-Scored CSV includes: `risk_points`, `rules_fired`, `rules_version`, `fraud_risk_category`.
+Point tiers from v2 scoring (for interpreting severity): High signal strength ≥ 4 pts, medium 2–3, low 0–1 — see [docs/RISK_RULES.md](docs/RISK_RULES.md).
+
+Scored CSV includes: `risk_points`, `rules_fired`, `rules_version` (`2.1.0`), `fraud_risk_category`.
 
 Full rule table and training workflow: **[docs/RISK_RULES.md](docs/RISK_RULES.md)**
 
