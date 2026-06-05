@@ -1,21 +1,19 @@
-# Work plan (simplified)
+# Work plan
 
-## Phase 1 — Done / in progress
+## Phase 1 — Complete
 
-- [x] `run_pipeline.py` ETL + `risk_rules.py` v2.1 (binary Low/High)
-- [x] Full score + train (`train_xgb.py`, `train_sklearn.py`, `--strict-rules-version`)
-- [x] Streamlit: rename, disclaimer, Explore sub-tabs (XGB / sklearn CSV)
-- [x] Docker build + local run
-- [x] GitHub: app code, `gbt_sklearn.pkl`, prediction CSVs
-- [x] **Render deploy:** https://fraud-detection-app-9pen.onrender.com/
-- [x] Live smoke test (Single, Batch, Explore) on Render URL
-- [x] Landing screenshots in `docs/images/` + README
-- [ ] Optional: commit `xgb_calibrated.pkl` for live XGB Single-tab on Render
+- [x] PySpark ETL + `risk_rules.py` v2.1 (binary Low/High)
+- [x] Full score + train (XGB + sklearn, `--strict-rules-version`)
+- [x] Streamlit demo (disclaimer, Explore sub-tabs, Render-hardened)
+- [x] Docker + Render deploy — https://fraud-detection-app-9pen.onrender.com/
+- [x] README live demo + screenshots (`docs/images/`)
+- [x] GitHub portfolio trim (deploy artifacts only in Git)
 
-## Phase 2+ (product)
+## Phase 2+
 
+- [ ] Faster Explore on Render (API / pre-aggregated stats)
 - [ ] FastAPI + Postgres for NPI lookup and score history
-- [ ] Auth and analyst queue
-- [ ] Slim Explore tab (sample rows / API) for faster Render UX
+- [ ] Auth and analyst review queue
+- [ ] OIG / exclusion list for external validation
 
-See [README.md](../README.md) and [docs/RISK_RULES.md](RISK_RULES.md).
+See [README.md](../README.md).

@@ -59,10 +59,6 @@ python Scripts/inspect_csv.py raw-payments --rows 3
 python Scripts/inspect_csv.py scored --rows 5
 ```
 
-## Migrating old flat `Data/*.csv` files
+## Data layout
 
-If files still sit directly under `Data/`, run once from project root:
-
-```bash
-bash Scripts/migrate_data_layout.sh
-```
+Clone uses stage folders under `Data/` (see [Data/README.md](../Data/README.md)). If you have legacy flat `Data/*.csv` files, move them into the matching stage folder manually.

@@ -2,8 +2,9 @@
 Data/*
 !Data/README.md
 !Data/Model_Data/
-!Data/Model_Data/.gitkeep
 !Data/Model_Data/*.csv
+# XGB predictions are large — regenerate locally; deploy uses sklearn CSV only
+Data/Model_Data/fraud_detection_xgb_predictions.csv
 
 # Spark / training temp outputs
 Data/_temp*/
