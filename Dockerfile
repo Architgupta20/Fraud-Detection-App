@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt /app/requirements.txt
 RUN pip3 install --no-cache-dir -r /app/requirements.txt
 
+COPY .streamlit/config.toml /app/.streamlit/config.toml
 COPY . /app
 
 ENV STREAMLIT_SERVER_HEADLESS=true

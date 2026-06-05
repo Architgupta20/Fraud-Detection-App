@@ -1,0 +1,3 @@
+prescriber_id,total_claims,total_drug_cost,opioid_cost,antibiotic_claims,avg_risk_score,payment_variability,adjusted_risk_payment
+1003000126,5000,250000,8000,150,1.0,1.5,75000
+1003000142,30000,2500000,900000,300,1.4,5.0,600000

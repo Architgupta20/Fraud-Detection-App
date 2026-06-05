@@ -157,20 +157,33 @@ use_spark = st.sidebar.checkbox(
 
 xgb_available = os.path.exists(XGB_MODEL_PATH)
 sklearn_available = os.path.exists(SKLEARN_MODEL_PATH)
+# Docker/Render set SKLEARN_MODEL_PATH — use sklearn (bundled in image) for live predict
+prefer_sklearn = bool(os.getenv("SKLEARN_MODEL_PATH"))
 
-# ---------- LOAD MODEL (XGB preferred for Single / Batch tabs) ----------
-pipeline_model, spark, ml_bundle = None, None, None
+# ---------- LOAD MODEL (sklearn on deploy; XGB locally when only that .pkl exists) ----------
+pipeline_model, spark, ml_bundle, loaded_model_name = None, None, None, None
 
-if xgb_available:
+if prefer_sklearn and sklearn_available:
+    try:
+        ml_bundle = joblib.load(SKLEARN_MODEL_PATH)
+        loaded_model_name = "sklearn GBT"
+    except Exception as e:
+        st.sidebar.error(f"Failed to load sklearn model: {e}")
+elif xgb_available:
     try:
         ml_bundle = joblib.load(XGB_MODEL_PATH)
+        loaded_model_name = "XGBoost"
     except Exception as e:
         st.sidebar.error(f"Failed to load XGBoost model: {e}")
 elif sklearn_available:
     try:
         ml_bundle = joblib.load(SKLEARN_MODEL_PATH)
+        loaded_model_name = "sklearn GBT"
     except Exception as e:
         st.sidebar.error(f"Failed to load sklearn model: {e}")
+
+if loaded_model_name:
+    st.sidebar.caption(f"Live model: {loaded_model_name}")
 
 if use_spark and SPARK_AVAILABLE and os.path.exists(MODEL_PATH):
     try:
@@ -186,12 +199,40 @@ if use_spark and SPARK_AVAILABLE and os.path.exists(MODEL_PATH):
         st.sidebar.error(f"Failed to load Spark model: {e}")
 
 
-@st.cache_data(show_spinner="Loading predictions CSV...")
-def load_predictions_csv(csv_path: str) -> pd.DataFrame:
-    df = pd.read_csv(csv_path)
+@st.cache_data(show_spinner=False)
+def count_csv_data_rows(csv_path: str) -> int:
+    with open(csv_path, "rb") as f:
+        return max(sum(1 for _ in f) - 1, 0)
+
+
+@st.cache_data(show_spinner="Loading preview...")
+def load_predictions_preview(csv_path: str, nrows: int = 100) -> pd.DataFrame:
+    df = pd.read_csv(csv_path, nrows=nrows)
     if "prescriber_id" in df.columns:
         df["prescriber_id"] = df["prescriber_id"].astype(str)
     return df
+
+
+@st.cache_data(show_spinner="Summarizing categories...")
+def category_counts_from_csv(csv_path: str) -> pd.Series:
+    """Memory-safe category counts for large prediction files (Render-friendly)."""
+    totals: Dict[str, int] = {}
+    for chunk in pd.read_csv(csv_path, usecols=["predicted_category"], chunksize=250_000):
+        for cat, cnt in chunk["predicted_category"].value_counts().items():
+            totals[str(cat)] = totals.get(str(cat), 0) + int(cnt)
+    return pd.Series(totals).sort_index()
+
+
+def lookup_prescriber_in_csv(csv_path: str, prescriber_id: str) -> pd.DataFrame:
+    target = str(prescriber_id).strip()
+    for chunk in pd.read_csv(csv_path, chunksize=250_000):
+        if "prescriber_id" not in chunk.columns:
+            break
+        chunk["prescriber_id"] = chunk["prescriber_id"].astype(str)
+        hit = chunk[chunk["prescriber_id"] == target]
+        if not hit.empty:
+            return hit
+    return pd.DataFrame()
 
 
 def render_explore_model_outputs(model_key: str, label: str) -> None:
@@ -201,25 +242,32 @@ def render_explore_model_outputs(model_key: str, label: str) -> None:
         st.warning(f"No predictions file for {label}. Run the matching train script.")
         return
     try:
-        df = load_predictions_csv(path)
+        row_count = count_csv_data_rows(path)
     except Exception as e:
-        st.error(f"Could not load {PREDICTIONS_FILES[model_key]}: {e}")
+        st.error(f"Could not read {PREDICTIONS_FILES[model_key]}: {e}")
         return
-    st.caption(f"{len(df):,} rows · `{PREDICTIONS_FILES[model_key]}`")
+    st.caption(f"{row_count:,} rows · `{PREDICTIONS_FILES[model_key]}` (preview shows first 100)")
     lookup_npi = st.text_input(
         "Filter by prescriber_id (optional)",
         key=f"explore_npi_{model_key}",
+        placeholder="e.g. 1003000126",
     )
     if lookup_npi.strip():
-        view_df = df[df["prescriber_id"] == lookup_npi.strip()]
+        with st.spinner("Searching..."):
+            view_df = lookup_prescriber_in_csv(path, lookup_npi.strip())
         if view_df.empty:
             st.warning("No rows for that prescriber_id.")
         else:
+            if "prescriber_id" in view_df.columns:
+                view_df["prescriber_id"] = view_df["prescriber_id"].astype(str)
             st.dataframe(view_df, use_container_width=True)
     else:
-        st.dataframe(df.head(100), use_container_width=True)
-        if "predicted_category" in df.columns:
-            st.bar_chart(df["predicted_category"].value_counts())
+        preview = load_predictions_preview(path)
+        st.dataframe(preview, use_container_width=True)
+        try:
+            st.bar_chart(category_counts_from_csv(path))
+        except Exception as e:
+            st.warning(f"Category chart skipped: {e}")
 
 # ---------- HELPER FUNCTIONS ----------
 def map_label_to_category(label_val):
@@ -514,7 +562,11 @@ st.markdown(
 # --- TAB 2: BATCH PREDICTION ---
 with tab2:
     st.header("Batch Prediction (CSV Upload)")
-    st.write("Upload a CSV with prescriber_id and feature columns.")
+    st.write(
+        "Upload a CSV with `prescriber_id` and model feature columns "
+        f"({', '.join(ML_FEATURE_COLS)}). "
+        "Try `Data/Model_Data/sample_batch_input.csv` from the repo."
+    )
     uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
     if uploaded_file:
         try:

@@ -4,6 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     plan: free
+    healthCheckPath: /_stcore/health
     envVars:
       - key: BASE_DIR
         value: /app
