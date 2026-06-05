@@ -10,7 +10,11 @@ Analyze **Medicare Part D prescribers** together with **CMS Open Payments** to b
 
 **[Prescriber Risk Prioritization (Render)](https://fraud-detection-app-9pen.onrender.com/)**
 
-First load on Render **free tier** can take **30–60+ seconds** (service wakes from sleep). After that, Single Prediction is usually responsive; **Explore Model Outputs** may stay slow because it loads large prediction CSVs (~75MB each).
+| Single prediction | Explore model outputs (~1.38M rows) |
+|-------------------|-------------------------------------|
+| ![Single prediction](docs/images/demo-single-prediction.png) | ![Explore outputs](docs/images/demo-explore-outputs.png) |
+
+First load on Render **free tier** can take **30–60+ seconds** (service wakes from sleep). After that, Single Prediction is usually responsive; **Explore** shows a 100-row preview plus chunked summaries of the full prediction files.
 
 ---
 

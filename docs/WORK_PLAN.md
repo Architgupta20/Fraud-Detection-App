@@ -8,8 +8,8 @@
 - [x] Docker build + local run
 - [x] GitHub: app code, `gbt_sklearn.pkl`, prediction CSVs
 - [x] **Render deploy:** https://fraud-detection-app-9pen.onrender.com/
-- [ ] Live smoke test (Single, Batch, Explore) on Render URL
-- [ ] Landing screenshot/GIF in repo
+- [x] Live smoke test (Single, Batch, Explore) on Render URL
+- [x] Landing screenshots in `docs/images/` + README
 - [ ] Optional: commit `xgb_calibrated.pkl` for live XGB Single-tab on Render
 
 ## Phase 2+ (product)
