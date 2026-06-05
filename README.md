@@ -6,6 +6,12 @@ Analyze **Medicare Part D prescribers** together with **CMS Open Payments** to b
 
 **Repository:** [github.com/Architgupta20/Fraud-Detection-App](https://github.com/Architgupta20/Fraud-Detection-App)
 
+## Live demo
+
+**[Prescriber Risk Prioritization (Render)](https://fraud-detection-app-9pen.onrender.com/)**
+
+First load on Render **free tier** can take **30–60+ seconds** (service wakes from sleep). After that, Single Prediction is usually responsive; **Explore Model Outputs** may stay slow because it loads large prediction CSVs (~75MB each).
+
 ---
 
 ## What this project does
@@ -155,7 +161,8 @@ python Models/train_xgb.py --nrows 50000 --sample-frac 1.0 --strict-rules-versio
 | XGBoost (calibrated) | 91.4% | 0.897 | 85.9% | 84.9% |
 | sklearn GBT | 90.7% | 0.888 | 85.0% | 83.6% |
 
-Saved locally (not in Git): `Models/xgb_calibrated.pkl`, `Models/gbt_sklearn.pkl`, and prediction CSVs under `Data/Model_Data/`.
+**Deploy artifacts in Git/Docker:** `Models/gbt_sklearn.pkl` and both prediction CSVs under `Data/Model_Data/`.  
+**Local only:** full scored CSV (~400MB), enriched/raw CMS data, and `Models/xgb_calibrated.pkl` (optional; not required for Render).
 
 ### 5. Run the app
 
@@ -220,13 +227,17 @@ The image includes `Models/gbt_sklearn.pkl` and `Data/Model_Data/` prediction CS
 
 ### Render
 
+**Live:** https://fraud-detection-app-9pen.onrender.com/
+
 Connect the GitHub repo; `render.yaml` uses the root `Dockerfile`. Env vars (also in `Dockerfile`):
 
 - `BASE_DIR=/app`
 - `MODEL_DATA_DIR=/app/Data/Model_Data`
 - `SKLEARN_MODEL_PATH=/app/Models/gbt_sklearn.pkl`
 
-> Ship **models + small artifacts only**, not 18 GB of raw CMS data. Precompute scores offline or load from object storage in production.
+**Free tier notes:** instances spin down after ~15 min idle; cold starts are slow. Upgrade plan or use a keep-alive ping for demos. Explore tab loads full prediction CSVs — consider sampling for faster UX in a later release.
+
+> Ship **models + demo artifacts** in Git/Docker, not 18 GB of raw CMS data.
 
 ---
 
@@ -245,19 +256,20 @@ Connect the GitHub repo; `render.yaml` uses the root `Dockerfile`. Env vars (als
 ## Current limitations
 
 - **No fraud ground truth** — labels are heuristics; frame as risk prioritization  
-- **Large local data** — raw CMS files stay on disk, not in Git  
+- **Large local data** — raw CMS files and full scored CSV stay on disk, not in Git  
 - **Streamlit prototype** — no auth, API, or case-management workflow yet  
-- **Artifacts are local** — scored CSV, `.pkl` models, and prediction CSVs must be generated on each machine  
+- **Render free tier** — cold starts and slow Explore tab (large prediction CSVs); Single Prediction uses sklearn bundle in Docker  
 
 ---
 
 ## Roadmap (product direction)
 
-1. Wire XGB bundle in Streamlit (sklearn path works today)  
-2. FastAPI + Postgres for NPI lookup and score history  
-3. Auth and analyst queue (filter, export, assign)  
-4. Similar-case search (embeddings) and optional LLM case summaries  
-5. OIG / exclusion list for external validation  
+1. Faster Explore on Render (sample rows / pre-aggregated stats instead of full CSV load)  
+2. Optional: commit `xgb_calibrated.pkl` for live XGB Single-tab on Render  
+3. FastAPI + Postgres for NPI lookup and score history  
+4. Auth and analyst queue (filter, export, assign)  
+5. Similar-case search (embeddings) and optional LLM case summaries  
+6. OIG / exclusion list for external validation  
 
 ---
 
