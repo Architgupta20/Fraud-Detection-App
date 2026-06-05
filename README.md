@@ -204,17 +204,27 @@ Training **rejects** legacy `Medium` labels; re-run `score` if the scored CSV is
 
 ```bash
 docker build -t prescriber-risk-app .
-docker run -p 8501:8501 -v "$(pwd)/Models:/app/Models" -v "$(pwd)/Data/Model_Data:/app/Data/Model_Data" prescriber-risk-app
+docker run --rm -p 8501:8501 prescriber-risk-app
 ```
 
-Mount trained `.pkl` files and `Model_Data/` predictions locally — they are **not** committed to Git (see `.gitignore`).
+Open **http://localhost:8501** in your browser (not `http://0.0.0.0:8501` — that address is for the container only).
+
+If port 8501 is busy (e.g. local Streamlit), map another host port:
+
+```bash
+docker run --rm -p 8502:8501 prescriber-risk-app
+# → http://localhost:8502
+```
+
+The image includes `Models/gbt_sklearn.pkl` and `Data/Model_Data/` prediction CSVs from Git.
 
 ### Render
 
-Connect the GitHub repo; `render.yaml` uses the root `Dockerfile`. Set:
+Connect the GitHub repo; `render.yaml` uses the root `Dockerfile`. Env vars (also in `Dockerfile`):
 
 - `BASE_DIR=/app`
 - `MODEL_DATA_DIR=/app/Data/Model_Data`
+- `SKLEARN_MODEL_PATH=/app/Models/gbt_sklearn.pkl`
 
 > Ship **models + small artifacts only**, not 18 GB of raw CMS data. Precompute scores offline or load from object storage in production.
 
