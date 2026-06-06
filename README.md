@@ -128,9 +128,11 @@ Open **http://localhost:8502** (not `0.0.0.0`).
 
 ---
 
-## Roadmap (Phase 2+)
+## Roadmap (Phase 2)
 
-FastAPI + Postgres, analyst queue, faster Explore API, OIG validation.
+**Start with Step 1:** NPI lookup (search by ID → score + rules fired), not 13 manual fields.
+
+Full plan (Postgres → FastAPI → analyst queue → auth → OIG): **[docs/WORK_PLAN.md](docs/WORK_PLAN.md)**
 
 ---
 

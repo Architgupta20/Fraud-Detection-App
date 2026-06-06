@@ -4,16 +4,139 @@
 
 - [x] PySpark ETL + `risk_rules.py` v2.1 (binary Low/High)
 - [x] Full score + train (XGB + sklearn, `--strict-rules-version`)
-- [x] Streamlit demo (disclaimer, Explore sub-tabs, Render-hardened)
-- [x] Docker + Render deploy — https://fraud-detection-app-9pen.onrender.com/
-- [x] README live demo + screenshots (`docs/images/`)
-- [x] GitHub portfolio trim (deploy artifacts only in Git)
+- [x] Streamlit demo (disclaimer, Explore sub-tabs, Render deploy)
+- [x] Live demo — https://fraud-detection-app-9pen.onrender.com/
+- [x] README + screenshots; GitHub portfolio trimmed for deploy
 
-## Phase 2+
+---
 
-- [ ] Faster Explore on Render (API / pre-aggregated stats)
-- [ ] FastAPI + Postgres for NPI lookup and score history
-- [ ] Auth and analyst review queue
-- [ ] OIG / exclusion list for external validation
+## Phase 2 — Product roadmap
 
-See [README.md](../README.md).
+Goal: turn the demo into something an analyst can **use** — NPI lookup first, then database + API, then workflow.
+
+### Step 1 — NPI lookup (start here) ⭐
+
+**What:** Type an NPI → instantly see risk category, points, and which rules fired.
+
+**Why first:** Single Prediction today asks for ~13 hand-typed features. Analysts have an **NPI**, not raw metrics.
+
+**What you already have (local):**
+
+- `Data/Scored_Datasets/fraud_risk_scored_prescribers.csv` (~1.38M rows, `rules_fired`, `risk_points`, `fraud_risk_category`)
+- `risk_rules.evaluate_rules_for_row()` for live rule explanations in Streamlit
+
+**Smallest win (1–2 days, before Postgres):**
+
+- Load scored CSV (or a indexed sample for Render)
+- Add **“Enter NPI”** search on the main tab
+- Show: `fraud_risk_category`, `risk_points`, `rules_fired`, key profile fields
+- Optional: join ML prediction from `Model_Data/` by `prescriber_id`
+
+**Gap on Render today:** full scored CSV is **not in Git** (~400 MB). Step 1 locally is easy; for live demo either ship a **sample** (e.g. top 10k High risk) or jump to Step 2–3.
+
+---
+
+### Step 2 — Postgres
+
+**What:** Load scored prescriber data into Postgres instead of giant CSVs.
+
+**Why:**
+
+- Fast NPI lookup (index on `prescriber_id`)
+- Filters: “All High risk in TX”
+- History when rules are re-run
+- Multi-user access
+
+**Flow:**
+
+1. Create table e.g. `prescribers` (NPI, category, points, rules_fired, state, provider_type, …)
+2. One-time ETL script: scored CSV → Postgres
+3. Index on `prescriber_id`
+
+**Host (free/cheap):** Render Postgres, Supabase, or Neon.
+
+---
+
+### Step 3 — FastAPI backend
+
+**What:** Small API, e.g.:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /health` | Liveness |
+| `GET /prescribers/{npi}` | One prescriber score + rules |
+| `GET /prescribers?risk=High&state=TX&limit=50` | Filtered list |
+
+**Order:** Postgres (Step 2) **then** FastAPI reads from DB (Step 3).
+
+**Why:** Streamlit calls API instead of loading 75MB+ CSVs on every visit → fixes slow Explore on Render.
+
+---
+
+### Step 4 — Streamlit → API
+
+**What:**
+
+- Lookup tab → `GET /prescribers/{npi}`
+- Explore / list → `GET /prescribers?...` with filters
+
+**Why:** Faster, cleaner live app; same UI, better backend.
+
+---
+
+### Step 5 — Pre-aggregated stats
+
+**What:** Precompute small summary tables (not full CSV scans on each visit):
+
+- Count by risk category
+- Count by state
+- Top N highest risk
+
+**How:** Script after each `run_pipeline.py score`, or `GET /stats/by-state` etc.
+
+**Why:** Free Render stays responsive.
+
+---
+
+### Step 6 — Analyst queue
+
+**What:** Workflow: filter High → mark Reviewed / Needs follow-up → export CSV.
+
+**Needs:** Postgres table e.g. `reviews` (npi, status, note, updated_at).
+
+**Why:** First **product** feature beyond lookup.
+
+---
+
+### Step 7 — Auth
+
+**What:** Login before app or before changing review status.
+
+**Why later:** Prove value with lookup + DB first. Demo can work without auth.
+
+**Options:** Streamlit password, Supabase Auth, Google OAuth.
+
+---
+
+### Step 8 — OIG / exclusion list (validation)
+
+**What:** Match prescribers against OIG exclusion list.
+
+**Why last:** Bonus trust signal; core product is still rule-based prioritization.
+
+---
+
+## Suggested build order
+
+```
+Step 1 (NPI in Streamlit, local/sample)
+    → Step 2 (Postgres)
+    → Step 3 (FastAPI)
+    → Step 4 (Streamlit → API)
+    → Step 5 (stats)
+    → Step 6 (queue)
+    → Step 7 (auth)
+    → Step 8 (OIG)
+```
+
+See [README.md](../README.md) for Phase 1 setup and live demo.
