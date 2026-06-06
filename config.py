@@ -55,7 +55,9 @@ NPI_LOOKUP_CSV = MODEL_DATA_DIR / "npi_risk_lookup.csv"
 NPI_LOOKUP_SQLITE = MODEL_DATA_DIR / "npi_risk_lookup.sqlite"
 NPI_LOOKUP_SQLITE_GZ = MODEL_DATA_DIR / "npi_risk_lookup.sqlite.gz"
 
-# Risk rules spec: risk_rules.py + docs/RISK_RULES.md
+# Prescriber Risk API (Phase 2 Step 3+)
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000").rstrip("/")
+
 try:
     from risk_rules import RULES_VERSION as RISK_RULES_VERSION
 except ImportError:

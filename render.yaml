@@ -1,5 +1,15 @@
 services:
   - type: web
+    name: prescriber-risk-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile.api
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+
+  - type: web
     name: fraud-detection-app
     runtime: docker
     dockerfilePath: ./Dockerfile
@@ -12,3 +22,6 @@ services:
         value: /app/Data/Model_Data
       - key: SKLEARN_MODEL_PATH
         value: /app/Models/gbt_sklearn.pkl
+      - key: API_BASE_URL
+        sync: false
+

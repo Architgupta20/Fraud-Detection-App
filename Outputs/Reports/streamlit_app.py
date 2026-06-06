@@ -14,6 +14,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from config import BASE_DIR as _CONFIG_BASE_DIR
+from config import API_BASE_URL as _CONFIG_API_BASE_URL
 from config import FRAUD_RISK_SCORED_CSV
 from config import GBT_SKLEARN_PKL
 from config import MODEL_DATA_DIR as _CONFIG_MODEL_DATA_DIR
@@ -26,6 +27,7 @@ from config import XGB_CALIBRATED_PKL
 from risk_rules import CLASS_NAMES, INV_LABEL_MAP, ML_FEATURE_COLS
 
 BASE_DIR = os.getenv("BASE_DIR", str(_CONFIG_BASE_DIR))
+API_BASE_URL = os.getenv("API_BASE_URL", _CONFIG_API_BASE_URL).rstrip("/")
 MODEL_PATH = os.getenv("MODEL_PATH", str(SPARK_PIPELINE_MODEL_DIR))
 MODEL_DATA_DIR = os.getenv("MODEL_DATA_DIR", str(_CONFIG_MODEL_DATA_DIR))
 SKLEARN_MODEL_PATH = os.getenv("SKLEARN_MODEL_PATH", str(GBT_SKLEARN_PKL))
@@ -129,6 +131,52 @@ def lookup_ml_prediction_for_npi(npi: str) -> Optional[Dict]:
     if df.empty:
         return None
     return df.iloc[0].to_dict()
+
+
+@st.cache_resource(show_spinner=False, ttl=60)
+def _api_ready() -> bool:
+    import api_client
+
+    api_client.API_BASE_URL = API_BASE_URL
+    return api_client.api_is_ready()
+
+
+def lookup_prescriber_via_api(npi: str) -> Optional[Dict]:
+    import api_client
+
+    api_client.API_BASE_URL = API_BASE_URL
+    return api_client.fetch_prescriber(npi)
+
+
+def render_prescriber_browse() -> None:
+    import api_client
+
+    api_client.API_BASE_URL = API_BASE_URL
+    st.subheader("Browse prescribers")
+    st.caption("Filter rule-based review priority from Postgres (via API).")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        risk_filter = st.selectbox("Review priority", ["All", "Low", "High"], key="browse_risk")
+    with c2:
+        state_filter = st.text_input("State (optional)", placeholder="TX", max_chars=2, key="browse_state")
+    with c3:
+        limit = st.number_input("Max rows", min_value=10, max_value=500, value=50, step=10, key="browse_limit")
+    if st.button("Search prescribers", key="browse_btn"):
+        with st.spinner("Querying API..."):
+            try:
+                data = api_client.fetch_prescribers(
+                    risk=risk_filter,
+                    state=state_filter,
+                    limit=int(limit),
+                )
+            except Exception as exc:
+                st.error(f"API request failed: {exc}")
+                return
+        st.caption(f"Showing {len(data['items']):,} of {data['total']:,} matching prescribers.")
+        if data["items"]:
+            st.dataframe(pd.DataFrame(data["items"]), use_container_width=True, hide_index=True)
+        else:
+            st.info("No prescribers match those filters.")
 
 
 def render_npi_lookup_result(row: Dict, ml_row: Optional[Dict] = None) -> None:
@@ -631,15 +679,20 @@ with tab_npi:
         "Enter a prescriber NPI to see rule-based review priority, fired rules, and ML prediction. "
         "No manual feature entry required."
     )
-    lookup_path = resolve_npi_lookup_path()
-    if lookup_path is None:
+    use_api = _api_ready()
+    lookup_path = resolve_npi_lookup_path() if not use_api else None
+
+    if use_api:
+        st.caption(f"Data source: Postgres API (`{API_BASE_URL}`)")
+    elif lookup_path is None:
         st.warning(
-            "No NPI lookup index found. Run `python run_pipeline.py score`, then "
-            "`python Scripts/build_npi_lookup_index.py` and commit `npi_risk_lookup.sqlite.gz`."
+            "No data source found. Start the API (`uvicorn api.main:app --port 8000`) or build "
+            "`npi_risk_lookup.sqlite.gz` for file-based lookup."
         )
     else:
-        st.caption(f"Index: `{os.path.basename(lookup_path)}`")
+        st.caption(f"Data source: `{os.path.basename(lookup_path)}` (file index)")
 
+    if use_api or lookup_path is not None:
         def _npi_load_example(npi: str) -> None:
             st.session_state["npi_lookup_input"] = npi
             st.session_state["npi_run_lookup"] = True
@@ -673,12 +726,19 @@ with tab_npi:
                 st.info("Enter an NPI above.")
             else:
                 with st.spinner("Searching..."):
-                    row = lookup_npi_in_risk_file(lookup_path, npi)
+                    if use_api:
+                        row = lookup_prescriber_via_api(npi)
+                    else:
+                        row = lookup_npi_in_risk_file(lookup_path, npi)
                     ml_row = lookup_ml_prediction_for_npi(npi)
                 if row is None:
                     st.warning(f"No prescriber found for NPI **{npi}**.")
                 else:
                     render_npi_lookup_result(row, ml_row)
+
+        if use_api:
+            st.markdown("---")
+            render_prescriber_browse()
 
 # --- TAB 1: SINGLE PREDICTION (manual) ---
 with tab1:
