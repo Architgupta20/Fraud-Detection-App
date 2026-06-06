@@ -59,6 +59,14 @@ NPI_LOOKUP_COLUMNS = [
     "total_payments_pct_flag",
 ]
 
+US_STATE_OPTIONS = [
+    "All",
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN",
+    "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH",
+    "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT",
+    "VT", "VA", "WA", "WV", "WI", "WY",
+]
+
 
 def resolve_npi_lookup_path() -> Optional[str]:
     """Prefer SQLite index (deploy); fall back to CSV / full scored file."""
@@ -158,7 +166,7 @@ def render_prescriber_browse() -> None:
     with c1:
         risk_filter = st.selectbox("Review priority", ["All", "Low", "High"], key="browse_risk")
     with c2:
-        state_filter = st.text_input("State (optional)", placeholder="TX", max_chars=2, key="browse_state")
+        state_filter = st.selectbox("State", US_STATE_OPTIONS, key="browse_state")
     with c3:
         limit = st.number_input("Max rows", min_value=10, max_value=500, value=50, step=10, key="browse_limit")
     if st.button("Search prescribers", key="browse_btn"):
@@ -166,7 +174,7 @@ def render_prescriber_browse() -> None:
             try:
                 data = api_client.fetch_prescribers(
                     risk=risk_filter,
-                    state=state_filter,
+                    state=state_filter if state_filter != "All" else None,
                     limit=int(limit),
                 )
             except Exception as exc:
