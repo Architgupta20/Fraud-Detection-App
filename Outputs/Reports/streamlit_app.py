@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import streamlit as st
 import pandas as pd
 import joblib
@@ -17,6 +18,9 @@ from config import FRAUD_RISK_SCORED_CSV
 from config import GBT_SKLEARN_PKL
 from config import MODEL_DATA_DIR as _CONFIG_MODEL_DATA_DIR
 from config import NPI_LOOKUP_CSV
+from config import NPI_LOOKUP_SQLITE
+from config import NPI_LOOKUP_SQLITE_GZ
+from config import RISK_RULES_VERSION
 from config import SPARK_PIPELINE_MODEL_DIR
 from config import XGB_CALIBRATED_PKL
 from risk_rules import CLASS_NAMES, INV_LABEL_MAP, ML_FEATURE_COLS
@@ -55,7 +59,11 @@ NPI_LOOKUP_COLUMNS = [
 
 
 def resolve_npi_lookup_path() -> Optional[str]:
-    """Prefer slim index (deploy); fall back to full scored CSV (local)."""
+    """Prefer SQLite index (deploy); fall back to CSV / full scored file."""
+    if os.path.exists(str(NPI_LOOKUP_SQLITE)):
+        return str(NPI_LOOKUP_SQLITE)
+    if os.path.exists(str(NPI_LOOKUP_SQLITE_GZ)):
+        return str(NPI_LOOKUP_SQLITE_GZ)
     slim = str(NPI_LOOKUP_CSV)
     if os.path.exists(slim):
         return slim
@@ -65,13 +73,41 @@ def resolve_npi_lookup_path() -> Optional[str]:
     return None
 
 
+@st.cache_resource(show_spinner="Preparing NPI lookup index (first load)...")
+def get_npi_sqlite_connection(db_path: str) -> sqlite3.Connection:
+    """Decompress .sqlite.gz once per container, then open indexed DB."""
+    import gzip
+    import shutil
+
+    path = db_path
+    if path.endswith(".gz"):
+        out = path[: -len(".gz")]
+        if not os.path.exists(out):
+            with gzip.open(path, "rb") as f_in, open(out, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        path = out
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def lookup_npi_in_risk_file(csv_path: str, npi: str) -> Optional[Dict]:
-    """Memory-safe NPI search — reads CSV in chunks."""
+    """NPI search — SQLite (fast) or chunked CSV (local fallback)."""
     target = str(npi).strip()
     if not target:
         return None
+
+    if csv_path.endswith(".sqlite") or csv_path.endswith(".sqlite.gz"):
+        conn = get_npi_sqlite_connection(csv_path)
+        cur = conn.execute(
+            "SELECT * FROM prescribers WHERE prescriber_id = ? LIMIT 1",
+            (target,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
     usecols = None
-    if "npi_risk_lookup" in csv_path or csv_path.endswith("npi_risk_lookup.csv"):
+    if csv_path.endswith("npi_risk_lookup.csv"):
         usecols = NPI_LOOKUP_COLUMNS
     else:
         usecols = lambda c: c in NPI_LOOKUP_COLUMNS or c == "prescriber_id"
@@ -111,7 +147,10 @@ def render_npi_lookup_result(row: Dict, ml_row: Optional[Dict] = None) -> None:
     c1.metric("NPI", row.get("prescriber_id", "—"))
     c2.metric("State", row.get("state", "—"))
     c3.metric("Specialty", row.get("provider_type", "—"))
-    st.markdown(f"**{name}** · {row.get('city', '')} · rules v{row.get('rules_version', '?')}")
+    rules_ver = row.get("rules_version") or RISK_RULES_VERSION
+    city = row.get("city") or ""
+    location = f" · {city}" if city and str(city) != "nan" else ""
+    st.markdown(f"**{name}**{location} · rules v{rules_ver}")
 
     if ml_row is not None:
         st.markdown("**ML model (sklearn GBT)**")
@@ -595,8 +634,8 @@ with tab_npi:
     lookup_path = resolve_npi_lookup_path()
     if lookup_path is None:
         st.warning(
-            "No scored lookup file found. Locally run `python run_pipeline.py score`, then "
-            "`python Scripts/build_npi_lookup_index.py` for deploy-sized index."
+            "No NPI lookup index found. Run `python run_pipeline.py score`, then "
+            "`python Scripts/build_npi_lookup_index.py` and commit `npi_risk_lookup.sqlite.gz`."
         )
     else:
         st.caption(f"Index: `{os.path.basename(lookup_path)}`")

@@ -21,7 +21,7 @@ _Spark_Temp           →  auto-deleted temp files (ignore)
 | **Aggregated_Datasets** | `prescriber_level_dataset.csv` (prescriber + summed payments per NPI) | `python run_pipeline.py aggregate` |
 | **Enriched_Datasets** | `prescriber_level_enriched.csv` | `python run_pipeline.py features` |
 | **Scored_Datasets** | `fraud_risk_scored_prescribers.csv` (Low/High only, `rules_version` 2.1.0) | `python run_pipeline.py score` |
-| **Model_Data** | `fraud_detection_gbt_sklearn_predictions.csv` (in Git for deploy); `npi_risk_lookup.csv` (local, `Scripts/build_npi_lookup_index.py`) | `Models/train_*.py` / build script |
+| **Model_Data** | `fraud_detection_gbt_sklearn_predictions.csv` (in Git for deploy); `npi_risk_lookup.sqlite.gz` (in Git for Render NPI lookup, `Scripts/build_npi_lookup_index.py`) | `Models/train_*.py` / build script |
 
 If you still have old **Low/Medium/High** scored or prediction files, delete them and re-run score + train:
 

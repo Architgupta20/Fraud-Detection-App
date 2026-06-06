@@ -21,10 +21,11 @@ Goal: turn the demo into something an analyst can **use** — NPI lookup first, 
 **Local:** uses `Data/Scored_Datasets/fraud_risk_scored_prescribers.csv` or slim index after:
 
 ```bash
-python Scripts/build_npi_lookup_index.py   # → Data/Model_Data/npi_risk_lookup.csv
+export BASE_DIR="$(pwd)"
+python Scripts/build_npi_lookup_index.py   # → Data/Model_Data/npi_risk_lookup.sqlite.gz
 ```
 
-**Render:** run the build script before `docker build` so the index is in the image (file is gitignored, ~260MB).
+**Render:** commit `npi_risk_lookup.sqlite.gz` (<95 MB) so the Docker image includes the NPI index (`.dockerignore` whitelists `*.sqlite.gz`).
 
 ---
 

@@ -52,6 +52,8 @@ FRAUD_RISK_SCORED_CSV = SCORED_DATA_DIR / "fraud_risk_scored_prescribers.csv"
 
 # Slim NPI lookup index (build via Scripts/build_npi_lookup_index.py)
 NPI_LOOKUP_CSV = MODEL_DATA_DIR / "npi_risk_lookup.csv"
+NPI_LOOKUP_SQLITE = MODEL_DATA_DIR / "npi_risk_lookup.sqlite"
+NPI_LOOKUP_SQLITE_GZ = MODEL_DATA_DIR / "npi_risk_lookup.sqlite.gz"
 
 # Risk rules spec: risk_rules.py + docs/RISK_RULES.md
 try:
