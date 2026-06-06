@@ -16,6 +16,8 @@ Rule-based **Medicare Part D prescriber review priority** (Low / High) using CMS
 
 Render **free tier** sleeps after ~15 min idle; first visit may take 30–60s to wake.
 
+**Start here in the app:** open the **NPI Lookup** tab — enter an NPI to see review priority and rules fired (no manual feature entry).
+
 ---
 
 ## Highlights
@@ -26,7 +28,7 @@ Render **free tier** sleeps after ~15 min idle; first visit may take 30–60s to
 | **Rules** | v2.1 additive points → **Low** (0–1 pts) / **High** (≥ 2 pts) |
 | **ML** | 80/20 holdout; XGB 91.4% acc / sklearn 90.7% on validation |
 | **Stack** | PySpark, pandas, XGBoost, sklearn, Streamlit, Docker, Render |
-| **Phase** | **Phase 1 complete** — live demo + pipeline + training |
+| **Phase** | **Phase 1 complete** · **Phase 2:** NPI Lookup tab live (Postgres/API next) |
 
 ---
 

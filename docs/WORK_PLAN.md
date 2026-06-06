@@ -14,25 +14,17 @@
 
 Goal: turn the demo into something an analyst can **use** — NPI lookup first, then database + API, then workflow.
 
-### Step 1 — NPI lookup (start here) ⭐
+### Step 1 — NPI lookup (start here) ⭐ **in progress**
 
-**What:** Type an NPI → instantly see risk category, points, and which rules fired.
+**Done in app:** **NPI Lookup** tab — enter NPI → category, points, rules fired, ML prediction (chunked search, no manual features).
 
-**Why first:** Single Prediction today asks for ~13 hand-typed features. Analysts have an **NPI**, not raw metrics.
+**Local:** uses `Data/Scored_Datasets/fraud_risk_scored_prescribers.csv` or slim index after:
 
-**What you already have (local):**
+```bash
+python Scripts/build_npi_lookup_index.py   # → Data/Model_Data/npi_risk_lookup.csv
+```
 
-- `Data/Scored_Datasets/fraud_risk_scored_prescribers.csv` (~1.38M rows, `rules_fired`, `risk_points`, `fraud_risk_category`)
-- `risk_rules.evaluate_rules_for_row()` for live rule explanations in Streamlit
-
-**Smallest win (1–2 days, before Postgres):**
-
-- Load scored CSV (or a indexed sample for Render)
-- Add **“Enter NPI”** search on the main tab
-- Show: `fraud_risk_category`, `risk_points`, `rules_fired`, key profile fields
-- Optional: join ML prediction from `Model_Data/` by `prescriber_id`
-
-**Gap on Render today:** full scored CSV is **not in Git** (~400 MB). Step 1 locally is easy; for live demo either ship a **sample** (e.g. top 10k High risk) or jump to Step 2–3.
+**Render:** run the build script before `docker build` so the index is in the image (file is gitignored, ~260MB).
 
 ---
 

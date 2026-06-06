@@ -50,6 +50,9 @@ PRESCRIBER_LEVEL_ENRICHED_CSV = ENRICHED_DATA_DIR / "prescriber_level_enriched.c
 # After score stage (main file for ML + app)
 FRAUD_RISK_SCORED_CSV = SCORED_DATA_DIR / "fraud_risk_scored_prescribers.csv"
 
+# Slim NPI lookup index (build via Scripts/build_npi_lookup_index.py)
+NPI_LOOKUP_CSV = MODEL_DATA_DIR / "npi_risk_lookup.csv"
+
 # Risk rules spec: risk_rules.py + docs/RISK_RULES.md
 try:
     from risk_rules import RULES_VERSION as RISK_RULES_VERSION

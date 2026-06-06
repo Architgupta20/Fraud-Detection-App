@@ -5,6 +5,7 @@ Data/*
 !Data/Model_Data/*.csv
 # XGB predictions are large — regenerate locally; deploy uses sklearn CSV only
 Data/Model_Data/fraud_detection_xgb_predictions.csv
+Data/Model_Data/npi_risk_lookup.csv
 
 # Spark / training temp outputs
 Data/_temp*/

@@ -13,8 +13,10 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from config import BASE_DIR as _CONFIG_BASE_DIR
+from config import FRAUD_RISK_SCORED_CSV
 from config import GBT_SKLEARN_PKL
 from config import MODEL_DATA_DIR as _CONFIG_MODEL_DATA_DIR
+from config import NPI_LOOKUP_CSV
 from config import SPARK_PIPELINE_MODEL_DIR
 from config import XGB_CALIBRATED_PKL
 from risk_rules import CLASS_NAMES, INV_LABEL_MAP, ML_FEATURE_COLS
@@ -37,6 +39,105 @@ def _predictions_path(key: str) -> Optional[str]:
         return None
     path = os.path.join(MODEL_DATA_DIR, name)
     return path if os.path.exists(path) else None
+
+
+# Columns for chunked NPI search (subset of scored file)
+NPI_LOOKUP_COLUMNS = [
+    "prescriber_id", "first_name", "last_name", "state", "city", "provider_type",
+    "fraud_risk_category", "risk_points", "rules_fired", "rules_version",
+    "total_claims", "total_drug_cost", "opioid_claims", "payment_to_drug_cost_ratio",
+    "peer_deviation_score", "avg_risk_score", "payment_variability", "adjusted_risk_payment",
+    "high_payment_flag", "high_opioid_flag", "elderly_focus_flag",
+    "antibiotic_claim_ratio", "antibiotic_claims", "total_payment_amount",
+    "opioid_volume_pct_flag", "peer_outlier_pct_flag", "payment_spiky_pct_flag",
+    "total_payments_pct_flag",
+]
+
+
+def resolve_npi_lookup_path() -> Optional[str]:
+    """Prefer slim index (deploy); fall back to full scored CSV (local)."""
+    slim = str(NPI_LOOKUP_CSV)
+    if os.path.exists(slim):
+        return slim
+    scored = str(FRAUD_RISK_SCORED_CSV)
+    if os.path.exists(scored):
+        return scored
+    return None
+
+
+def lookup_npi_in_risk_file(csv_path: str, npi: str) -> Optional[Dict]:
+    """Memory-safe NPI search — reads CSV in chunks."""
+    target = str(npi).strip()
+    if not target:
+        return None
+    usecols = None
+    if "npi_risk_lookup" in csv_path or csv_path.endswith("npi_risk_lookup.csv"):
+        usecols = NPI_LOOKUP_COLUMNS
+    else:
+        usecols = lambda c: c in NPI_LOOKUP_COLUMNS or c == "prescriber_id"
+    for chunk in pd.read_csv(csv_path, usecols=usecols, chunksize=250_000):
+        if "prescriber_id" not in chunk.columns:
+            break
+        chunk["prescriber_id"] = chunk["prescriber_id"].astype(str)
+        hit = chunk[chunk["prescriber_id"] == target]
+        if not hit.empty:
+            return hit.iloc[0].to_dict()
+    return None
+
+
+def lookup_ml_prediction_for_npi(npi: str) -> Optional[Dict]:
+    path = _predictions_path("sklearn")
+    if not path:
+        return None
+    df = lookup_prescriber_in_csv(path, npi)
+    if df.empty:
+        return None
+    return df.iloc[0].to_dict()
+
+
+def render_npi_lookup_result(row: Dict, ml_row: Optional[Dict] = None) -> None:
+    name = " ".join(
+        p for p in (row.get("first_name"), row.get("last_name")) if p and str(p) != "nan"
+    ).strip() or "—"
+    category = row.get("fraud_risk_category", "—")
+    points = row.get("risk_points", "—")
+
+    if category == "High":
+        st.error(f"Review priority: **High** ({points} risk points)")
+    else:
+        st.success(f"Review priority: **Low** ({points} risk points)")
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("NPI", row.get("prescriber_id", "—"))
+    c2.metric("State", row.get("state", "—"))
+    c3.metric("Specialty", row.get("provider_type", "—"))
+    st.markdown(f"**{name}** · {row.get('city', '')} · rules v{row.get('rules_version', '?')}")
+
+    if ml_row is not None:
+        st.markdown("**ML model (sklearn GBT)**")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Predicted", ml_row.get("predicted_category", "—"))
+        if "p_low" in ml_row and "p_high" in ml_row:
+            m2.metric("P(Low)", f"{float(ml_row['p_low']):.3f}")
+            m3.metric("P(High)", f"{float(ml_row['p_high']):.3f}")
+
+    st.markdown("**Key signals**")
+    sig_cols = st.columns(4)
+    sig_cols[0].caption(f"Claims: {row.get('total_claims', '—')}")
+    sig_cols[1].caption(f"Payment/cost ratio: {row.get('payment_to_drug_cost_ratio', '—')}")
+    sig_cols[2].caption(f"Opioid claims: {row.get('opioid_claims', '—')}")
+    sig_cols[3].caption(f"Peer deviation: {row.get('peer_deviation_score', '—')}")
+
+    fired = get_fired_rules(row)
+    st.markdown("**Rules fired**")
+    if fired:
+        for rule_name, detail in fired:
+            st.markdown(f"- **{rule_name}:** {detail}")
+    else:
+        st.markdown("_No rule signals fired for this prescriber._")
+    raw = row.get("rules_fired")
+    if raw and str(raw).strip():
+        st.caption(f"Rule IDs: `{raw}`")
 
 FOUND_CONFUSION_IMG = None  # optional; add PNG paths under Model_Data/ if you save plots from training
 
@@ -480,9 +581,58 @@ def predict_with_pipeline_single(row_dict: Dict):
     }
 
 # ---------- UI ----------
-tab1, tab2, tab3 = st.tabs(["Single Prediction", "Batch Prediction (CSV Upload)", "Explore Model Outputs"])
+tab_npi, tab1, tab2, tab3 = st.tabs(
+    ["NPI Lookup", "Single Prediction (manual)", "Batch Prediction (CSV Upload)", "Explore Model Outputs"]
+)
 
-# --- TAB 1: SINGLE PREDICTION ---
+# --- TAB 0: NPI LOOKUP ---
+with tab_npi:
+    st.header("NPI Lookup")
+    st.caption(
+        "Enter a prescriber NPI to see rule-based review priority, fired rules, and ML prediction. "
+        "No manual feature entry required."
+    )
+    lookup_path = resolve_npi_lookup_path()
+    if lookup_path is None:
+        st.warning(
+            "No scored lookup file found. Locally run `python run_pipeline.py score`, then "
+            "`python Scripts/build_npi_lookup_index.py` for deploy-sized index."
+        )
+    else:
+        st.caption(f"Index: `{os.path.basename(lookup_path)}`")
+        npi_input = st.text_input(
+            "Prescriber NPI (National Provider Identifier)",
+            placeholder="e.g. 1003000126",
+            key="npi_lookup_input",
+        )
+        example_col1, example_col2 = st.columns(2)
+        with example_col1:
+            if st.button("Try example Low (1003000126)", key="npi_ex_low"):
+                st.session_state["npi_lookup_input"] = "1003000126"
+                st.session_state["npi_run_lookup"] = True
+                st.rerun()
+        with example_col2:
+            if st.button("Try example High (1003000142)", key="npi_ex_high"):
+                st.session_state["npi_lookup_input"] = "1003000142"
+                st.session_state["npi_run_lookup"] = True
+                st.rerun()
+        run_lookup = st.button("Look up", type="primary", key="npi_lookup_btn") or st.session_state.pop(
+            "npi_run_lookup", False
+        )
+        if run_lookup:
+            npi = str(st.session_state.get("npi_lookup_input", npi_input or "")).strip()
+            if not npi:
+                st.info("Enter an NPI above.")
+            else:
+                with st.spinner("Searching..."):
+                    row = lookup_npi_in_risk_file(lookup_path, npi)
+                    ml_row = lookup_ml_prediction_for_npi(npi)
+                if row is None:
+                    st.warning(f"No prescriber found for NPI **{npi}**.")
+                else:
+                    render_npi_lookup_result(row, ml_row)
+
+# --- TAB 1: SINGLE PREDICTION (manual) ---
 with tab1:
     st.header("Single Prescriber Prediction")
     left_col, right_col = st.columns([1, 1])
