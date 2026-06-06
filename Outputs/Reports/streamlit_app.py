@@ -248,8 +248,64 @@ def render_risk_dashboard() -> None:
     if top_risk["items"]:
         st.dataframe(pd.DataFrame(top_risk["items"]), use_container_width=True, hide_index=True)
 
+    try:
+        oig = api_client.fetch_oig_overlap(sample_limit=10)
+    except Exception:
+        oig = None
+    if oig and oig.get("oig_exclusion_count", 0) > 0:
+        st.markdown("---")
+        st.subheader("OIG exclusion screening")
+        st.caption("Cross-check against HHS OIG LEIE (federal exclusion list, NPI matches only).")
+        o1, o2 = st.columns(2)
+        o1.metric("OIG exclusions loaded (NPI)", f"{oig['oig_exclusion_count']:,}")
+        o2.metric("Matches in our prescriber panel", f"{oig['prescriber_overlap_count']:,}")
+        if oig.get("sample"):
+            st.markdown("**Sample overlapping NPIs**")
+            st.dataframe(pd.DataFrame(oig["sample"]), use_container_width=True, hide_index=True)
+
+
+def _format_oig_date(raw: Optional[str]) -> str:
+    if not raw or str(raw).strip() in ("", "00000000", "nan"):
+        return "—"
+    text = str(raw).strip()
+    if len(text) == 8 and text.isdigit():
+        return f"{text[4:6]}/{text[6:8]}/{text[0:4]}"
+    return text
+
+
+def render_oig_check(npi: str) -> None:
+    import api_client
+
+    if not _api_ready():
+        return
+    api_client.API_BASE_URL = API_BASE_URL
+    st.markdown("**OIG exclusion check (LEIE)**")
+    try:
+        result = api_client.fetch_oig_check(npi)
+    except Exception as exc:
+        st.warning(f"OIG check unavailable: {exc}")
+        return
+    if result.get("on_exclusion_list") and result.get("exclusion"):
+        ex = result["exclusion"]
+        st.error(
+            "Federal OIG exclusion list match — this NPI appears on the LEIE. "
+            "Treat as a compliance red flag (not automatic proof of current program eligibility)."
+        )
+        name = " ".join(
+            p for p in (ex.get("first_name"), ex.get("last_name")) if p and str(p) != "nan"
+        ).strip() or ex.get("business_name") or "—"
+        st.markdown(
+            f"- **Name / entity:** {name}\n"
+            f"- **Exclusion type:** `{ex.get('exclusion_type', '—')}`\n"
+            f"- **Exclusion date:** {_format_oig_date(ex.get('exclusion_date'))}\n"
+            f"- **Reinstatement date:** {_format_oig_date(ex.get('reinstatement_date'))}"
+        )
+    else:
+        st.success("No OIG LEIE match for this NPI (NPI-indexed subset).")
+
 
 REVIEW_STATUS_OPTIONS = ["All", "pending", "reviewed", "needs_followup"]
+
 
 
 def render_analyst_queue() -> None:
@@ -386,6 +442,11 @@ def render_npi_lookup_result(row: Dict, ml_row: Optional[Dict] = None) -> None:
     raw = row.get("rules_fired")
     if raw and str(raw).strip():
         st.caption(f"Rule IDs: `{raw}`")
+
+    npi = str(row.get("prescriber_id", "")).strip()
+    if npi:
+        st.markdown("---")
+        render_oig_check(npi)
 
 FOUND_CONFUSION_IMG = None  # optional; add PNG paths under Model_Data/ if you save plots from training
 

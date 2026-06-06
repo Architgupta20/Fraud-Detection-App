@@ -132,11 +132,15 @@ Set the **same** `APP_API_KEY` on both Render services.
 
 ---
 
-### Step 8 — OIG / exclusion list (validation)
+### Step 8 — OIG / exclusion list (validation) ✅ **done**
 
-**What:** Match prescribers against OIG exclusion list.
+**What:** Match prescribers against HHS OIG LEIE (federal exclusion list).
 
-**Why last:** Bonus trust signal; core product is still rule-based prioritization.
+**Load:** `python Scripts/load_oig_to_postgres.py` (downloads UPDATED.csv, ~8k NPI rows).
+
+**API:** `GET /oig/check/{npi}`, `GET /stats/oig-overlap`
+
+**App:** OIG banner on NPI Lookup; overlap stats on Risk Dashboard.
 
 ---
 

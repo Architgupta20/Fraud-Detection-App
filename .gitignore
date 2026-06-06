@@ -1,6 +1,9 @@
 # Large raw/processed datasets (keep locally or use DVC / release assets)
 Data/*
 !Data/README.md
+!Data/Original_Datasets/
+!Data/Original_Datasets/.gitkeep
+Data/Original_Datasets/*.csv
 !Data/Model_Data/
 !Data/Model_Data/*.csv
 # XGB predictions are large — regenerate locally; deploy uses sklearn CSV only

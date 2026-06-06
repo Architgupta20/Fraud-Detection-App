@@ -24,6 +24,9 @@ from api.db import close_pool, get_cursor, init_pool, row_to_dict
 from api.schemas import (
     CategoryCount,
     HealthResponse,
+    OigCheckResponse,
+    OigExclusion,
+    OigOverlapResponse,
     Prescriber,
     PrescriberListResponse,
     PrescriberSummary,
@@ -323,4 +326,61 @@ def export_reviews(
         content=buf.getvalue(),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=review_queue_export.csv"},
+    )
+
+
+OIG_SELECT = """
+    SELECT npi, last_name, first_name, business_name, specialty, state,
+           exclusion_type, exclusion_date, reinstatement_date
+    FROM oig_exclusions
+"""
+
+
+@app.get("/oig/check/{npi}", response_model=OigCheckResponse)
+def check_oig_exclusion(npi: str) -> OigCheckResponse:
+    target = npi.strip()
+    if not target:
+        raise HTTPException(status_code=400, detail="NPI is required")
+    with get_cursor() as cur:
+        cur.execute(f"{OIG_SELECT} WHERE npi = %s", (target,))
+        row = row_to_dict(cur.fetchone())
+    if row is None:
+        return OigCheckResponse(npi=target, on_exclusion_list=False, exclusion=None)
+    return OigCheckResponse(
+        npi=target,
+        on_exclusion_list=True,
+        exclusion=OigExclusion(**row),
+    )
+
+
+@app.get("/stats/oig-overlap", response_model=OigOverlapResponse)
+def stats_oig_overlap(sample_limit: int = Query(10, ge=1, le=50)) -> OigOverlapResponse:
+    with get_cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM oig_exclusions")
+        oig_count = int(cur.fetchone()[0])
+        cur.execute(
+            """
+            SELECT COUNT(*)
+            FROM prescribers p
+            INNER JOIN oig_exclusions o ON p.prescriber_id = o.npi
+            """
+        )
+        overlap = int(cur.fetchone()[0])
+        cur.execute(
+            f"""
+            {OIG_SELECT}
+            WHERE npi IN (
+                SELECT p.prescriber_id
+                FROM prescribers p
+                INNER JOIN oig_exclusions o ON p.prescriber_id = o.npi
+                LIMIT %s
+            )
+            """,
+            (sample_limit,),
+        )
+        sample = [OigExclusion(**row_to_dict(r)) for r in cur.fetchall()]
+    return OigOverlapResponse(
+        oig_exclusion_count=oig_count,
+        prescriber_overlap_count=overlap,
+        sample=sample,
     )

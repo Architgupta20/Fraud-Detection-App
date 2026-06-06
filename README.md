@@ -28,7 +28,7 @@ Render **free tier** sleeps after ~15 min idle; first visit may take 30–60s to
 | **Rules** | v2.1 additive points → **Low** (0–1 pts) / **High** (≥ 2 pts) |
 | **ML** | 80/20 holdout; XGB 91.4% acc / sklearn 90.7% on validation |
 | **Stack** | PySpark, pandas, XGBoost, sklearn, **FastAPI**, **Postgres**, Streamlit, Docker, Render |
-| **Phase** | **Phase 1 complete** · **Phase 2 Steps 1–7 complete** (Step 8 OIG next) |
+| **Phase** | **Phase 2 complete** (Steps 1–8 including OIG LEIE screening) |
 
 ---
 
@@ -114,6 +114,8 @@ Preview CSVs safely: `python Scripts/inspect_csv.py scored --rows 5`
 | GET | `/reviews` | Analyst queue (join prescribers + reviews) |
 | PUT | `/reviews/{npi}` | Update review status (requires `X-API-Key`) |
 | GET | `/reviews/export` | CSV export (requires `X-API-Key`) |
+| GET | `/oig/check/{npi}` | OIG LEIE exclusion match for NPI |
+| GET | `/stats/oig-overlap` | OIG exclusions overlapping prescriber panel |
 
 Interactive docs: `http://localhost:8000/docs` when running locally.
 
@@ -197,7 +199,7 @@ Open **http://localhost:8502**.
 | 5. Pre-aggregated stats | Done |
 | 6. Analyst review queue | Done |
 | 7. Auth | Done |
-| 8. OIG exclusion validation | Planned |
+| 8. OIG exclusion validation | Done |
 
 Full plan: **[docs/WORK_PLAN.md](docs/WORK_PLAN.md)**
 

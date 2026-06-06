@@ -117,3 +117,28 @@ class ReviewListResponse(BaseModel):
     offset: int
     items: List[ReviewQueueItem]
 
+
+class OigExclusion(BaseModel):
+    npi: str
+    last_name: Optional[str] = None
+    first_name: Optional[str] = None
+    business_name: Optional[str] = None
+    specialty: Optional[str] = None
+    state: Optional[str] = None
+    exclusion_type: Optional[str] = None
+    exclusion_date: Optional[str] = None
+    reinstatement_date: Optional[str] = None
+
+
+class OigCheckResponse(BaseModel):
+    npi: str
+    on_exclusion_list: bool
+    exclusion: Optional[OigExclusion] = None
+
+
+class OigOverlapResponse(BaseModel):
+    oig_exclusion_count: int
+    prescriber_overlap_count: int
+    sample: List[OigExclusion]
+
+

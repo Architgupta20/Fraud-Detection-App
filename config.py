@@ -26,6 +26,7 @@ OUTPUTS_DIR = BASE_DIR / "Outputs"
 
 # --- Data folders (one stage per folder — see Data/README.md) ---
 ORIGINAL_DATA_DIR = DATA_DIR / "Original_Datasets"
+OIG_LEIE_CSV = ORIGINAL_DATA_DIR / "oig_leie_updated.csv"
 CLEANED_DATA_DIR = DATA_DIR / "Cleaned_Datasets"
 AGGREGATED_DATA_DIR = DATA_DIR / "Aggregated_Datasets"
 ENRICHED_DATA_DIR = DATA_DIR / "Enriched_Datasets"

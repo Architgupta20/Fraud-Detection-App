@@ -140,3 +140,20 @@ def export_reviews_csv(
     )
     resp.raise_for_status()
     return resp.text
+
+
+def fetch_oig_check(npi: str) -> Dict[str, Any]:
+    target = str(npi).strip()
+    resp = requests.get(f"{API_BASE_URL}/oig/check/{target}", timeout=_TIMEOUT)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def fetch_oig_overlap(*, sample_limit: int = 10) -> Dict[str, Any]:
+    resp = requests.get(
+        f"{API_BASE_URL}/stats/oig-overlap",
+        params={"sample_limit": sample_limit},
+        timeout=_TIMEOUT,
+    )
+    resp.raise_for_status()
+    return resp.json()
