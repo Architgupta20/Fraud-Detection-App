@@ -14,18 +14,39 @@
 
 Goal: turn the demo into something an analyst can **use** — NPI lookup first, then database + API, then workflow.
 
-### Step 1 — NPI lookup (start here) ⭐ **in progress**
+### Step 1 — NPI lookup ⭐ **done**
 
-**Done in app:** **NPI Lookup** tab — enter NPI → category, points, rules fired, ML prediction (chunked search, no manual features).
+**Done in app:** **NPI Lookup** tab — enter NPI → category, points, rules fired, ML prediction.
 
-**Local:** uses `Data/Scored_Datasets/fraud_risk_scored_prescribers.csv` or slim index after:
+**Render fallback:** `npi_risk_lookup.sqlite.gz` when API unavailable.
 
-```bash
-export BASE_DIR="$(pwd)"
-python Scripts/build_npi_lookup_index.py   # → Data/Model_Data/npi_risk_lookup.sqlite.gz
-```
+---
 
-**Render:** commit `npi_risk_lookup.sqlite.gz` (<95 MB) so the Docker image includes the NPI index (`.dockerignore` whitelists `*.sqlite.gz`).
+### Step 5 — Pre-aggregated stats ✅ **done**
+
+**API:** `GET /stats/summary`, `/stats/by-state`, `/stats/top-risk`
+
+**App:** **Risk Dashboard** tab (charts + top prescribers from Postgres).
+
+---
+
+### Step 6 — Analyst queue ✅ **done**
+
+**Table:** `reviews` (prescriber_id, status, note, updated_at)
+
+**API:** `GET /reviews`, `PUT /reviews/{npi}`, `GET /reviews/export`
+
+**App:** **Analyst Queue** tab — filter High risk, save status, export CSV.
+
+---
+
+### Step 7 — Auth ✅ **done**
+
+**Streamlit:** `APP_PASSWORD` gates Analyst Queue tab.
+
+**API:** `APP_API_KEY` required for review writes/export (`X-API-Key` header).
+
+Set the **same** `APP_API_KEY` on both Render services.
 
 ---
 

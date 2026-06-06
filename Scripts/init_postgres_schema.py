@@ -21,7 +21,16 @@ _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-SQL_FILE = Path(__file__).resolve().parent / "sql" / "001_create_prescribers.sql"
+SQL_DIR = Path(__file__).resolve().parent / "sql"
+
+
+def _apply_sql_files(cur) -> None:
+    files = sorted(SQL_DIR.glob("*.sql"))
+    if not files:
+        raise FileNotFoundError(f"No SQL files in {SQL_DIR}")
+    for sql_file in files:
+        print(f"Applying {sql_file.name} ...")
+        cur.execute(sql_file.read_text())
 
 
 def _load_dotenv() -> None:
@@ -50,30 +59,30 @@ def main() -> None:
     except ImportError as exc:
         raise SystemExit("Install psycopg2: pip install psycopg2-binary") from exc
 
-    sql = SQL_FILE.read_text()
-    print(f"Applying {SQL_FILE.name} ...")
+    print(f"Applying schema from {SQL_DIR} ...")
     with psycopg2.connect(url) as conn:
         with conn.cursor() as cur:
-            cur.execute(sql)
+            _apply_sql_files(cur)
         conn.commit()
 
     with psycopg2.connect(url) as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT column_name, data_type
-                FROM information_schema.columns
-                WHERE table_name = 'prescribers'
-                ORDER BY ordinal_position
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+                ORDER BY table_name
                 """
             )
-            cols = cur.fetchall()
+            tables = [r[0] for r in cur.fetchall()]
             cur.execute("SELECT COUNT(*) FROM prescribers")
-            count = cur.fetchone()[0]
+            prescribers = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) FROM reviews")
+            reviews = cur.fetchone()[0]
 
-    print(f"Table prescribers ready ({len(cols)} columns, {count:,} rows).")
-    for name, dtype in cols:
-        print(f"  - {name}: {dtype}")
+    print(f"Tables: {', '.join(tables)}")
+    print(f"prescribers: {prescribers:,} rows | reviews: {reviews:,} rows")
 
 
 if __name__ == "__main__":

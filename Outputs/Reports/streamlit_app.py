@@ -15,6 +15,8 @@ if str(_ROOT) not in sys.path:
 
 from config import BASE_DIR as _CONFIG_BASE_DIR
 from config import API_BASE_URL as _CONFIG_API_BASE_URL
+from config import APP_API_KEY as _CONFIG_APP_API_KEY
+from config import APP_PASSWORD as _CONFIG_APP_PASSWORD
 from config import FRAUD_RISK_SCORED_CSV
 from config import GBT_SKLEARN_PKL
 from config import MODEL_DATA_DIR as _CONFIG_MODEL_DATA_DIR
@@ -28,6 +30,8 @@ from risk_rules import CLASS_NAMES, INV_LABEL_MAP, ML_FEATURE_COLS
 
 BASE_DIR = os.getenv("BASE_DIR", str(_CONFIG_BASE_DIR))
 API_BASE_URL = os.getenv("API_BASE_URL", _CONFIG_API_BASE_URL).rstrip("/")
+APP_PASSWORD = os.getenv("APP_PASSWORD", _CONFIG_APP_PASSWORD)
+APP_API_KEY = os.getenv("APP_API_KEY", _CONFIG_APP_API_KEY)
 MODEL_PATH = os.getenv("MODEL_PATH", str(SPARK_PIPELINE_MODEL_DIR))
 MODEL_DATA_DIR = os.getenv("MODEL_DATA_DIR", str(_CONFIG_MODEL_DATA_DIR))
 SKLEARN_MODEL_PATH = os.getenv("SKLEARN_MODEL_PATH", str(GBT_SKLEARN_PKL))
@@ -185,6 +189,155 @@ def render_prescriber_browse() -> None:
             st.dataframe(pd.DataFrame(data["items"]), use_container_width=True, hide_index=True)
         else:
             st.info("No prescribers match those filters.")
+
+
+def require_analyst_login() -> bool:
+    """Step 7: password gate for analyst queue (skipped when APP_PASSWORD unset)."""
+    if not APP_PASSWORD:
+        return True
+    if st.session_state.get("analyst_authenticated"):
+        return True
+    st.subheader("Analyst login")
+    st.caption("Enter the app password to update review status and export the queue.")
+    with st.form("analyst_login_form"):
+        entered = st.text_input("Password", type="password")
+        if st.form_submit_button("Log in"):
+            if entered == APP_PASSWORD:
+                st.session_state["analyst_authenticated"] = True
+                st.rerun()
+            st.error("Incorrect password.")
+    return False
+
+
+def render_risk_dashboard() -> None:
+    import api_client
+
+    api_client.API_BASE_URL = API_BASE_URL
+    if not _api_ready():
+        st.warning("Risk dashboard requires the Postgres API. Set `API_BASE_URL` and deploy the API service.")
+        return
+
+    try:
+        summary = api_client.fetch_stats_summary()
+        by_state = api_client.fetch_stats_by_state(limit=15)
+        top_risk = api_client.fetch_top_risk(limit=10)
+    except Exception as exc:
+        st.error(f"Could not load stats: {exc}")
+        return
+
+    st.subheader("Population overview")
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total prescribers", f"{summary['total_prescribers']:,}")
+    cat_map = {row["category"]: row["count"] for row in summary["by_category"]}
+    m2.metric("Low priority", f"{cat_map.get('Low', 0):,}")
+    m3.metric("High priority", f"{cat_map.get('High', 0):,}")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Review priority mix**")
+        st.bar_chart(pd.Series({row["category"]: row["count"] for row in summary["by_category"]}))
+    with c2:
+        st.markdown("**Top states by prescriber count**")
+        if by_state["items"]:
+            st.bar_chart(
+                pd.Series({row["state"]: row["count"] for row in by_state["items"]}),
+                horizontal=True,
+            )
+
+    st.markdown("**Top risk prescribers**")
+    if top_risk["items"]:
+        st.dataframe(pd.DataFrame(top_risk["items"]), use_container_width=True, hide_index=True)
+
+
+REVIEW_STATUS_OPTIONS = ["All", "pending", "reviewed", "needs_followup"]
+
+
+def render_analyst_queue() -> None:
+    import api_client
+
+    api_client.API_BASE_URL = API_BASE_URL
+    if not _api_ready():
+        st.warning("Analyst queue requires the Postgres API.")
+        return
+    if not require_analyst_login():
+        return
+
+    st.subheader("Review queue")
+    st.caption("Filter High-priority prescribers, update review status, and export CSV.")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        status_filter = st.selectbox("Review status", REVIEW_STATUS_OPTIONS, key="queue_status")
+    with c2:
+        state_filter = st.selectbox("State", US_STATE_OPTIONS, key="queue_state")
+    with c3:
+        limit = st.number_input("Max rows", min_value=10, max_value=500, value=50, step=10, key="queue_limit")
+
+    if st.button("Load queue", key="queue_load_btn"):
+        with st.spinner("Loading queue..."):
+            try:
+                data = api_client.fetch_reviews(
+                    status=status_filter,
+                    state=state_filter if state_filter != "All" else None,
+                    limit=int(limit),
+                )
+                st.session_state["queue_data"] = data
+            except Exception as exc:
+                st.error(f"Could not load queue: {exc}")
+
+    data = st.session_state.get("queue_data")
+    if data:
+        st.caption(f"Showing {len(data['items']):,} of {data['total']:,} queue rows.")
+        if data["items"]:
+            st.dataframe(pd.DataFrame(data["items"]), use_container_width=True, hide_index=True)
+        else:
+            st.info("No rows match these filters.")
+
+    st.markdown("---")
+    st.markdown("**Update a prescriber review**")
+    u1, u2 = st.columns([1, 2])
+    with u1:
+        update_npi = st.text_input("NPI", key="queue_update_npi", placeholder="e.g. 1003000142")
+        update_status = st.selectbox(
+            "Status",
+            ["pending", "reviewed", "needs_followup"],
+            key="queue_update_status",
+        )
+    with u2:
+        update_note = st.text_area("Note (optional)", key="queue_update_note", height=100)
+    if st.button("Save review", key="queue_save_btn"):
+        if not update_npi.strip():
+            st.warning("Enter an NPI to update.")
+        else:
+            try:
+                api_client.upsert_review(
+                    update_npi.strip(),
+                    status=update_status,
+                    note=update_note.strip() or None,
+                    api_key=APP_API_KEY or None,
+                )
+                st.success(f"Saved review for NPI {update_npi.strip()}.")
+                st.session_state.pop("queue_data", None)
+            except Exception as exc:
+                st.error(f"Save failed: {exc}")
+
+    if st.button("Export queue CSV", key="queue_export_btn"):
+        try:
+            st.session_state["queue_export_csv"] = api_client.export_reviews_csv(
+                status=status_filter,
+                state=state_filter if state_filter != "All" else None,
+                api_key=APP_API_KEY or None,
+            )
+        except Exception as exc:
+            st.error(f"Export failed: {exc}")
+
+    if st.session_state.get("queue_export_csv"):
+        st.download_button(
+            "Download CSV",
+            st.session_state["queue_export_csv"].encode("utf-8"),
+            file_name="review_queue_export.csv",
+            mime="text/csv",
+            key="queue_download_btn",
+        )
 
 
 def render_npi_lookup_result(row: Dict, ml_row: Optional[Dict] = None) -> None:
@@ -676,8 +829,15 @@ def predict_with_pipeline_single(row_dict: Dict):
     }
 
 # ---------- UI ----------
-tab_npi, tab1, tab2, tab3 = st.tabs(
-    ["NPI Lookup", "Single Prediction (manual)", "Batch Prediction (CSV Upload)", "Explore Model Outputs"]
+tab_npi, tab_stats, tab_queue, tab1, tab2, tab3 = st.tabs(
+    [
+        "NPI Lookup",
+        "Risk Dashboard",
+        "Analyst Queue",
+        "Single Prediction (manual)",
+        "Batch Prediction (CSV Upload)",
+        "Explore Model Outputs",
+    ]
 )
 
 # --- TAB 0: NPI LOOKUP ---
@@ -747,6 +907,18 @@ with tab_npi:
         if use_api:
             st.markdown("---")
             render_prescriber_browse()
+
+# --- TAB: RISK DASHBOARD (Step 5) ---
+with tab_stats:
+    st.header("Risk Dashboard")
+    st.caption("Pre-aggregated stats from Postgres — no full CSV scan.")
+    render_risk_dashboard()
+
+# --- TAB: ANALYST QUEUE (Step 6 + 7) ---
+with tab_queue:
+    st.header("Analyst Queue")
+    st.caption("Track review status for High-priority prescribers. Login required when APP_PASSWORD is set.")
+    render_analyst_queue()
 
 # --- TAB 1: SINGLE PREDICTION (manual) ---
 with tab1:

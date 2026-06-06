@@ -58,6 +58,10 @@ NPI_LOOKUP_SQLITE_GZ = MODEL_DATA_DIR / "npi_risk_lookup.sqlite.gz"
 # Prescriber Risk API (Phase 2 Step 3+)
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000").rstrip("/")
 
+# Analyst auth (Phase 2 Step 7) — optional; leave unset for open demo
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+APP_API_KEY = os.environ.get("APP_API_KEY", "")
+
 try:
     from risk_rules import RULES_VERSION as RISK_RULES_VERSION
 except ImportError:

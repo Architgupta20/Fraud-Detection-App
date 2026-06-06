@@ -28,7 +28,7 @@ Render **free tier** sleeps after ~15 min idle; first visit may take 30–60s to
 | **Rules** | v2.1 additive points → **Low** (0–1 pts) / **High** (≥ 2 pts) |
 | **ML** | 80/20 holdout; XGB 91.4% acc / sklearn 90.7% on validation |
 | **Stack** | PySpark, pandas, XGBoost, sklearn, **FastAPI**, **Postgres**, Streamlit, Docker, Render |
-| **Phase** | **Phase 1 complete** · **Phase 2 Steps 1–4 complete** (NPI + Postgres + API + Streamlit) |
+| **Phase** | **Phase 1 complete** · **Phase 2 Steps 1–7 complete** (Step 8 OIG next) |
 
 ---
 
@@ -108,6 +108,12 @@ Preview CSVs safely: `python Scripts/inspect_csv.py scored --rows 5`
 | GET | `/health` | Liveness + DB connection |
 | GET | `/prescribers/{npi}` | One prescriber (rules + metrics) |
 | GET | `/prescribers?risk=High&state=TX&limit=50` | Filtered list |
+| GET | `/stats/summary` | Counts by review priority |
+| GET | `/stats/by-state` | Prescriber counts by state |
+| GET | `/stats/top-risk` | Highest risk_points prescribers |
+| GET | `/reviews` | Analyst queue (join prescribers + reviews) |
+| PUT | `/reviews/{npi}` | Update review status (requires `X-API-Key`) |
+| GET | `/reviews/export` | CSV export (requires `X-API-Key`) |
 
 Interactive docs: `http://localhost:8000/docs` when running locally.
 
@@ -176,7 +182,7 @@ Open **http://localhost:8502**.
 | [docs/RISK_RULES.md](docs/RISK_RULES.md) | Scoring rules v2.1 |
 | [docs/LABEL_LEAKAGE.md](docs/LABEL_LEAKAGE.md) | ML feature boundaries |
 | [docs/SPARK.md](docs/SPARK.md) | PySpark 3.5.5 / Python 3.13 |
-| [docs/WORK_PLAN.md](docs/WORK_PLAN.md) | Phase 2 roadmap (Steps 5–8 next) |
+| [docs/WORK_PLAN.md](docs/WORK_PLAN.md) | Phase 2 roadmap (Step 8 OIG next) |
 
 ---
 
@@ -188,9 +194,9 @@ Open **http://localhost:8502**.
 | 2. Postgres + load data | Done |
 | 3. FastAPI backend | Done |
 | 4. Streamlit → API | Done |
-| 5. Pre-aggregated stats | Next |
-| 6. Analyst review queue | Planned |
-| 7. Auth | Planned |
+| 5. Pre-aggregated stats | Done |
+| 6. Analyst review queue | Done |
+| 7. Auth | Done |
 | 8. OIG exclusion validation | Planned |
 
 Full plan: **[docs/WORK_PLAN.md](docs/WORK_PLAN.md)**
