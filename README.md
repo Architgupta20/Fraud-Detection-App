@@ -1,8 +1,8 @@
 # Prescriber Risk Prioritization Platform
 
-Rule-based **Medicare Part D prescriber review priority** (Low / High) using CMS prescribing + Open Payments data, PySpark ETL, calibrated ML, and a public Streamlit demo backed by Postgres.
+Rule-based **Medicare Part D prescriber review priority** (Low / High) using CMS prescribing + Open Payments data, PySpark ETL, calibrated ML, **HHS OIG exclusion screening**, and a production-style **Postgres + FastAPI + Streamlit** stack on Render.
 
-> **Disclaimer:** Labels are **not confirmed fraud** — they prioritize human review only.
+> **Disclaimer:** Labels are **not confirmed fraud** — they prioritize human review only. OIG matches indicate federal exclusion list presence, not automatic eligibility determinations.
 
 **Repository:** [github.com/Architgupta20/Fraud-Detection-App](https://github.com/Architgupta20/Fraud-Detection-App)
 
@@ -16,7 +16,15 @@ Rule-based **Medicare Part D prescriber review priority** (Low / High) using CMS
 
 Render **free tier** sleeps after ~15 min idle; first visit may take 30–60s to wake.
 
-**Start here in the app:** open the **NPI Lookup** tab — enter an NPI to see review priority, rules fired, and ML prediction. When the API is connected, you can also **browse prescribers** by risk level and state.
+### App tabs
+
+| Tab | Purpose |
+|-----|---------|
+| **NPI Lookup** | Enter NPI → review priority, rules fired, ML prediction, **OIG LEIE check**, browse by state/risk |
+| **Risk Dashboard** | Population stats, charts, top-risk prescribers, OIG overlap counts |
+| **Analyst Queue** | Filter High-priority prescribers, mark reviewed / needs follow-up, export CSV |
+| **Single / Batch** | Manual or CSV batch ML prediction |
+| **Explore** | Precomputed XGB / sklearn prediction previews |
 
 ---
 
@@ -27,8 +35,9 @@ Render **free tier** sleeps after ~15 min idle; first visit may take 30–60s to
 | **Scale** | ~1.38M prescribers after ETL |
 | **Rules** | v2.1 additive points → **Low** (0–1 pts) / **High** (≥ 2 pts) |
 | **ML** | 80/20 holdout; XGB 91.4% acc / sklearn 90.7% on validation |
-| **Stack** | PySpark, pandas, XGBoost, sklearn, **FastAPI**, **Postgres**, Streamlit, Docker, Render |
-| **Phase** | **Phase 2 complete** (Steps 1–8 including OIG LEIE screening) |
+| **OIG** | ~8.4k LEIE NPI exclusions loaded; cross-check on lookup |
+| **Stack** | PySpark, pandas, XGBoost, sklearn, FastAPI, Postgres, Streamlit, Docker, Render |
+| **Phase** | **Phase 1 + Phase 2 complete** (NPI → Postgres → API → dashboard → queue → auth → OIG) |
 
 ---
 
@@ -38,14 +47,15 @@ Render **free tier** sleeps after ~15 min idle; first visit may take 30–60s to
 CMS CSVs (local)
     → run_pipeline.py (clean → aggregate → features → score)
     → fraud_risk_scored_prescribers.csv
-         ├─→ load_prescribers_to_postgres.py → Render Postgres
-         └─→ build_npi_lookup_index.py → npi_risk_lookup.sqlite.gz (fallback)
+         ├─→ load_prescribers_to_postgres.py → Render Postgres (prescribers)
+         ├─→ load_oig_to_postgres.py        → Render Postgres (oig_exclusions)
+         └─→ build_npi_lookup_index.py     → npi_risk_lookup.sqlite.gz (fallback)
 
 Render Postgres
     → prescriber-risk-api (FastAPI, Dockerfile.api)
     → fraud-detection-app (Streamlit, Dockerfile)
-         NPI Lookup + Browse prescribers via API_BASE_URL
-         Falls back to SQLite index if API is unavailable
+         Tabs call API via API_BASE_URL
+         Falls back to SQLite index if API unavailable
 ```
 
 **Single source of truth for rules:** `risk_rules.py`. Details: [docs/RISK_RULES.md](docs/RISK_RULES.md).
@@ -60,10 +70,9 @@ Render Postgres
 | `api/` FastAPI service, `api_client.py`, `Dockerfile.api` | `.env` (DATABASE_URL, secrets) |
 | `Models/train_*.py`, `gbt_sklearn.pkl` | `xgb_calibrated.pkl` |
 | `Outputs/Reports/streamlit_app.py` | Full scored CSV (~400 MB) |
-| `npi_risk_lookup.sqlite.gz` (~72 MB deploy index) | Uncompressed lookup CSV/SQLite |
+| `npi_risk_lookup.sqlite.gz` (~72 MB deploy index) | OIG LEIE CSV (~15 MB, downloaded by load script) |
 | `fraud_detection_gbt_sklearn_predictions.csv` | XGB predictions CSV |
-| Postgres scripts (`Scripts/load_prescribers_to_postgres.py`, schema SQL) | |
-| `sample_batch_input.csv`, `Dockerfile`, `render.yaml` | |
+| Postgres + OIG scripts (`Scripts/load_*.py`, `Scripts/sql/`) | |
 
 ---
 
@@ -80,10 +89,11 @@ pip install -r requirements-spark.txt   # ETL only; Java 17+
 1. **Data** — download CMS files per [docs/DATA.md](docs/DATA.md) into `Data/Original_Datasets/`
 2. **ETL** — `export BASE_DIR="$(pwd)" && python run_pipeline.py all`
 3. **Train** — `python Models/train_xgb.py --sample-frac 1.0 --strict-rules-version` (and sklearn)
-4. **Postgres (optional)** — copy `.env.example` to `.env`, set `DATABASE_URL`, then:
+4. **Postgres** — copy `.env.example` to `.env`, set `DATABASE_URL`, then:
    ```bash
    python Scripts/init_postgres_schema.py
    python Scripts/load_prescribers_to_postgres.py
+   python Scripts/load_oig_to_postgres.py      # downloads HHS OIG LEIE CSV
    ```
 5. **API + app** — two terminals:
    ```bash
@@ -111,11 +121,11 @@ Preview CSVs safely: `python Scripts/inspect_csv.py scored --rows 5`
 | GET | `/stats/summary` | Counts by review priority |
 | GET | `/stats/by-state` | Prescriber counts by state |
 | GET | `/stats/top-risk` | Highest risk_points prescribers |
-| GET | `/reviews` | Analyst queue (join prescribers + reviews) |
+| GET | `/stats/oig-overlap` | OIG exclusions overlapping prescriber panel |
+| GET | `/reviews` | Analyst queue (prescribers + review status) |
 | PUT | `/reviews/{npi}` | Update review status (requires `X-API-Key`) |
 | GET | `/reviews/export` | CSV export (requires `X-API-Key`) |
 | GET | `/oig/check/{npi}` | OIG LEIE exclusion match for NPI |
-| GET | `/stats/oig-overlap` | OIG exclusions overlapping prescriber panel |
 
 Interactive docs: `http://localhost:8000/docs` when running locally.
 
@@ -134,16 +144,31 @@ Train/val split: **80% / 20%** by hashed `prescriber_id`.
 
 ## Deploy (Render)
 
-Two web services + one Postgres database:
+Three Render resources: **Postgres** + **two web services**.
 
 | Service | Dockerfile | Key env vars |
 |---------|------------|--------------|
-| **prescriber-risk-api** | `Dockerfile.api` | `DATABASE_URL` (Postgres **Internal** URL) |
-| **fraud-detection-app** | `Dockerfile` | `BASE_DIR`, `MODEL_DATA_DIR`, `SKLEARN_MODEL_PATH`, **`API_BASE_URL`** (API public URL) |
+| **prescriber-risk-api** | `Dockerfile.api` | `DATABASE_URL` (Internal), `APP_API_KEY` |
+| **fraud-detection-app** | `Dockerfile` | `BASE_DIR`, `MODEL_DATA_DIR`, `SKLEARN_MODEL_PATH`, `API_BASE_URL`, `APP_API_KEY`, `APP_PASSWORD` (optional) |
 
-**API service settings:** Health check path `/health`, Dockerfile path `Dockerfile.api`.
+**API service:** Health check `/health`, Dockerfile path `Dockerfile.api`.
 
-**Streamlit** uses the API when `API_BASE_URL` is set; otherwise falls back to the bundled SQLite index.
+**After deploy — load data once from your Mac:**
+
+```bash
+export BASE_DIR="$(pwd)"
+# DATABASE_URL = Postgres External URL from Render
+python Scripts/init_postgres_schema.py
+python Scripts/load_prescribers_to_postgres.py
+python Scripts/load_oig_to_postgres.py
+```
+
+**Auth (optional):**
+
+| Variable | Service | Purpose |
+|----------|---------|---------|
+| `APP_PASSWORD` | Streamlit | Login gate on Analyst Queue tab |
+| `APP_API_KEY` | API + Streamlit (same value) | Protect review save / CSV export |
 
 **Docker (Streamlit only, local)**
 
@@ -165,7 +190,7 @@ Open **http://localhost:8502**.
 ├── api_client.py              # Streamlit → API client
 ├── Models/                    # train_xgb, train_sklearn, gbt_sklearn.pkl
 ├── Outputs/Reports/           # Streamlit app
-├── Scripts/                   # NPI index, Postgres load, schema
+├── Scripts/                   # NPI index, Postgres/OIG load, schema SQL
 ├── Data/Model_Data/           # predictions, sqlite.gz lookup index
 ├── docs/                      # DATA, RISK_RULES, images, WORK_PLAN
 ├── Dockerfile                 # Streamlit
@@ -184,30 +209,28 @@ Open **http://localhost:8502**.
 | [docs/RISK_RULES.md](docs/RISK_RULES.md) | Scoring rules v2.1 |
 | [docs/LABEL_LEAKAGE.md](docs/LABEL_LEAKAGE.md) | ML feature boundaries |
 | [docs/SPARK.md](docs/SPARK.md) | PySpark 3.5.5 / Python 3.13 |
-| [docs/WORK_PLAN.md](docs/WORK_PLAN.md) | Phase 2 roadmap (Step 8 OIG next) |
+| [docs/WORK_PLAN.md](docs/WORK_PLAN.md) | Phase 2 plan (complete) |
 
 ---
 
-## Roadmap (Phase 2)
+## Phase 2 roadmap — complete
 
-| Step | Status |
-|------|--------|
-| 1. NPI Lookup | Done |
-| 2. Postgres + load data | Done |
-| 3. FastAPI backend | Done |
-| 4. Streamlit → API | Done |
-| 5. Pre-aggregated stats | Done |
-| 6. Analyst review queue | Done |
-| 7. Auth | Done |
-| 8. OIG exclusion validation | Done |
-
-Full plan: **[docs/WORK_PLAN.md](docs/WORK_PLAN.md)**
+| Step | Feature | Status |
+|------|---------|--------|
+| 1 | NPI Lookup | Done |
+| 2 | Postgres + load data | Done |
+| 3 | FastAPI backend | Done |
+| 4 | Streamlit → API | Done |
+| 5 | Risk Dashboard (stats) | Done |
+| 6 | Analyst review queue | Done |
+| 7 | Auth (`APP_PASSWORD` / `APP_API_KEY`) | Done |
+| 8 | OIG LEIE exclusion screening | Done |
 
 ---
 
 ## Ethics
 
-Public CMS provider data — do not present model output as proof of fraud.
+Public CMS and OIG data — do not present model output or OIG matches as proof of fraud or program ineligibility without official verification.
 
 ## License
 
