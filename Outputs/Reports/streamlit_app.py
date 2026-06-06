@@ -639,6 +639,11 @@ with tab_npi:
         )
     else:
         st.caption(f"Index: `{os.path.basename(lookup_path)}`")
+
+        def _npi_load_example(npi: str) -> None:
+            st.session_state["npi_lookup_input"] = npi
+            st.session_state["npi_run_lookup"] = True
+
         npi_input = st.text_input(
             "Prescriber NPI (National Provider Identifier)",
             placeholder="e.g. 1003000126",
@@ -646,15 +651,19 @@ with tab_npi:
         )
         example_col1, example_col2 = st.columns(2)
         with example_col1:
-            if st.button("Try example Low (1003000126)", key="npi_ex_low"):
-                st.session_state["npi_lookup_input"] = "1003000126"
-                st.session_state["npi_run_lookup"] = True
-                st.rerun()
+            st.button(
+                "Try example Low (1003000126)",
+                key="npi_ex_low",
+                on_click=_npi_load_example,
+                args=("1003000126",),
+            )
         with example_col2:
-            if st.button("Try example High (1003000142)", key="npi_ex_high"):
-                st.session_state["npi_lookup_input"] = "1003000142"
-                st.session_state["npi_run_lookup"] = True
-                st.rerun()
+            st.button(
+                "Try example High (1003000142)",
+                key="npi_ex_high",
+                on_click=_npi_load_example,
+                args=("1003000142",),
+            )
         run_lookup = st.button("Look up", type="primary", key="npi_lookup_btn") or st.session_state.pop(
             "npi_run_lookup", False
         )
