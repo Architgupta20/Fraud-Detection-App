@@ -201,12 +201,19 @@ def require_analyst_login() -> bool:
     st.caption("Enter the app password to update review status and export the queue.")
     with st.form("analyst_login_form"):
         entered = st.text_input("Password", type="password")
-        if st.form_submit_button("Log in"):
+        if st.form_submit_button("Log in", type="primary"):
             if entered == APP_PASSWORD:
                 st.session_state["analyst_authenticated"] = True
                 st.rerun()
             st.error("Incorrect password.")
     return False
+
+
+def render_analyst_logout_button() -> None:
+    if APP_PASSWORD and st.session_state.get("analyst_authenticated"):
+        if st.sidebar.button("Log out (analyst)", key="analyst_logout"):
+            st.session_state.pop("analyst_authenticated", None)
+            st.rerun()
 
 
 def render_risk_dashboard() -> None:
@@ -356,6 +363,7 @@ def render_analyst_queue() -> None:
         update_status = st.selectbox(
             "Status",
             ["pending", "reviewed", "needs_followup"],
+            format_func=lambda s: {"pending": "Pending", "reviewed": "Reviewed", "needs_followup": "Needs follow-up"}[s],
             key="queue_update_status",
         )
     with u2:
@@ -427,10 +435,10 @@ def render_npi_lookup_result(row: Dict, ml_row: Optional[Dict] = None) -> None:
 
     st.markdown("**Key signals**")
     sig_cols = st.columns(4)
-    sig_cols[0].caption(f"Claims: {row.get('total_claims', '—')}")
-    sig_cols[1].caption(f"Payment/cost ratio: {row.get('payment_to_drug_cost_ratio', '—')}")
-    sig_cols[2].caption(f"Opioid claims: {row.get('opioid_claims', '—')}")
-    sig_cols[3].caption(f"Peer deviation: {row.get('peer_deviation_score', '—')}")
+    sig_cols[0].metric("Claims", row.get("total_claims", "—"))
+    sig_cols[1].metric("Pay/cost ratio", f"{float(row.get('payment_to_drug_cost_ratio') or 0):.3f}" if row.get("payment_to_drug_cost_ratio") is not None else "—")
+    sig_cols[2].metric("Opioid claims", row.get("opioid_claims", "—"))
+    sig_cols[3].metric("Peer deviation", f"{float(row.get('peer_deviation_score') or 0):.2f}" if row.get("peer_deviation_score") is not None else "—")
 
     fired = get_fired_rules(row)
     st.markdown("**Rules fired**")
@@ -553,8 +561,9 @@ DISCLAIMER = (
     "Use this tool to **prioritize human review**, not as legal proof of wrongdoing."
 )
 
-st.set_page_config(page_title=APP_TITLE, layout="wide")
+st.set_page_config(page_title=APP_TITLE, layout="wide", page_icon="🏥")
 st.title(APP_TITLE)
+st.caption("Medicare Part D prescriber review priority · rules v2.1 · ML · OIG screening")
 st.info(DISCLAIMER)
 
 # Sidebar (minimal — model outputs live on Explore tab)
@@ -607,6 +616,27 @@ if use_spark and SPARK_AVAILABLE and os.path.exists(MODEL_PATH):
         pipeline_model = None
         use_spark = False
         st.sidebar.error(f"Failed to load Spark model: {e}")
+
+
+def render_sidebar_status() -> None:
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("System status")
+    if _api_ready():
+        st.sidebar.success("Postgres API connected")
+    elif resolve_npi_lookup_path():
+        st.sidebar.info("File index (SQLite)")
+    else:
+        st.sidebar.warning("No lookup data source")
+    if loaded_model_name:
+        st.sidebar.caption(f"Prediction model: {loaded_model_name}")
+    st.sidebar.caption(f"Rules version: {RISK_RULES_VERSION}")
+    with st.sidebar.expander("Quick reference"):
+        st.markdown(
+            "- **NPI Lookup** — search by ID, OIG check, browse filters\n"
+            "- **Risk Dashboard** — population stats\n"
+            "- **Analyst Queue** — review workflow\n"
+            "- **Low** = 0–1 pts · **High** = ≥ 2 pts"
+        )
 
 
 @st.cache_data(show_spinner=False)
@@ -890,14 +920,17 @@ def predict_with_pipeline_single(row_dict: Dict):
     }
 
 # ---------- UI ----------
+render_sidebar_status()
+render_analyst_logout_button()
+
 tab_npi, tab_stats, tab_queue, tab1, tab2, tab3 = st.tabs(
     [
-        "NPI Lookup",
-        "Risk Dashboard",
-        "Analyst Queue",
-        "Single Prediction (manual)",
-        "Batch Prediction (CSV Upload)",
-        "Explore Model Outputs",
+        "🔍 NPI Lookup",
+        "📊 Risk Dashboard",
+        "📋 Analyst Queue",
+        "Single Prediction",
+        "Batch Upload",
+        "Explore Outputs",
     ]
 )
 
@@ -912,14 +945,14 @@ with tab_npi:
     lookup_path = resolve_npi_lookup_path() if not use_api else None
 
     if use_api:
-        st.caption(f"Data source: Postgres API (`{API_BASE_URL}`)")
+        st.success(f"Connected to Postgres API")
     elif lookup_path is None:
         st.warning(
             "No data source found. Start the API (`uvicorn api.main:app --port 8000`) or build "
             "`npi_risk_lookup.sqlite.gz` for file-based lookup."
         )
     else:
-        st.caption(f"Data source: `{os.path.basename(lookup_path)}` (file index)")
+        st.info(f"Using local file index: `{os.path.basename(lookup_path)}`")
 
     if use_api or lookup_path is not None:
         def _npi_load_example(npi: str) -> None:
@@ -946,7 +979,7 @@ with tab_npi:
                 on_click=_npi_load_example,
                 args=("1003000142",),
             )
-        run_lookup = st.button("Look up", type="primary", key="npi_lookup_btn") or st.session_state.pop(
+        run_lookup = st.button("🔎 Look up", type="primary", key="npi_lookup_btn") or st.session_state.pop(
             "npi_run_lookup", False
         )
         if run_lookup:
@@ -1050,17 +1083,9 @@ with tab1:
             except Exception as e:
                 st.error(f"Prediction failed: {e}")
 
-st.markdown("### Notes")
-st.markdown(
-    "- Enter prescriber details and numeric features, then click **Predict**.\n"
-    "- **Explore Model Outputs** uses sub-tabs for XGBoost vs sklearn prediction files.\n"
-    "- Rule labels (v2.1): **Low** (0–1 risk points), **High** (≥ 2 points).\n"
-    "- ML categories: Low = 0, High = 1 (`p_low`, `p_high` on batch export)."
-)
-
 # --- TAB 2: BATCH PREDICTION ---
 with tab2:
-    st.header("Batch Prediction (CSV Upload)")
+    st.header("Batch Prediction")
     st.write(
         "Upload a CSV with `prescriber_id` and model feature columns "
         f"({', '.join(ML_FEATURE_COLS)}). "
